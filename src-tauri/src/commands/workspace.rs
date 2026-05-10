@@ -1,4 +1,5 @@
 use crate::workspace::create;
+use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
 use crate::workspace::open;
 use crate::workspace::source_accounts::{self, AddSourceAccountInput};
 use crate::workspace::types::{CreateWorkspaceInput, LedgerValidationSummary, WorkspaceSummary};
@@ -25,6 +26,11 @@ pub fn add_source_account(
     input: AddSourceAccountInput,
 ) -> Result<WorkspaceSummary, WorkspaceError> {
     source_accounts::add_source_account(input)
+}
+
+#[tauri::command]
+pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, WorkspaceError> {
+    imports::import_statement_rows(input)
 }
 
 #[cfg(test)]

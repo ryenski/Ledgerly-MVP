@@ -7,7 +7,8 @@ pub fn run() {
             commands::workspace::create_workspace,
             commands::workspace::open_workspace,
             commands::workspace::validate_workspace,
-            commands::workspace::add_source_account
+            commands::workspace::add_source_account,
+            commands::workspace::import_statement_rows
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ledgerly");

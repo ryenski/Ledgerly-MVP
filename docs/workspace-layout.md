@@ -43,6 +43,13 @@ When the Founder-Operator records a known Opening Balance, Ledgerly appends a Be
 
 SQLite does not replace the ledger. It exists so later slices can add staging, source mappings, categorization rules, operation logs, and cache state while keeping the Workspace local-first.
 
+The CSV Import slice creates durable local Staging Area tables:
+
+- `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
+- `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, optional supporting fields, raw row JSON, source file name, and pending/accounted status.
+
+Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
+
 ## Validation Scope
 
 Ledgerly uses structural Ledger Validation for the current MVP slices:

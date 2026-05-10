@@ -3,6 +3,8 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type {
   AddSourceAccountInput,
+  CsvImportInput,
+  CsvImportResult,
   LedgerValidationSummary,
   WorkspaceCreateInput,
   WorkspaceSummary,
@@ -13,6 +15,7 @@ type WorkspaceApi = {
   openWorkspace: (path: string) => Promise<WorkspaceSummary>;
   validateWorkspace: (path: string) => Promise<LedgerValidationSummary>;
   addSourceAccount: (input: AddSourceAccountInput) => Promise<WorkspaceSummary>;
+  importStatementRows: (input: CsvImportInput) => Promise<CsvImportResult>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
 };
@@ -55,6 +58,15 @@ export async function addSourceAccount(
     return window.__LEDGERLY_TEST_API__.addSourceAccount(input);
   }
   return invoke<WorkspaceSummary>("add_source_account", { input });
+}
+
+export async function importStatementRows(
+  input: CsvImportInput,
+): Promise<CsvImportResult> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.importStatementRows(input);
+  }
+  return invoke<CsvImportResult>("import_statement_rows", { input });
 }
 
 export async function pickDirectory(): Promise<string | null> {

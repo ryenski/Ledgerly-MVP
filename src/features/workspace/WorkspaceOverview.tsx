@@ -1,4 +1,5 @@
-import type { WorkspaceSummary } from "../../lib/workspace/types";
+import type { CsvSourceMappingInput, WorkspaceSummary } from "../../lib/workspace/types";
+import { CsvImportSetup } from "./CsvImportSetup";
 import { SourceAccountSetup } from "./SourceAccountSetup";
 import type { SourceAccountKind } from "../../lib/workspace/types";
 
@@ -11,6 +12,12 @@ type WorkspaceOverviewProps = {
     kind: SourceAccountKind;
     name: string;
     openingBalance: string | null;
+  }) => Promise<void> | void;
+  onImportStatementRows?: (input: {
+    sourceAccount: string;
+    sourceFileName: string;
+    csvContents: string;
+    mapping: CsvSourceMappingInput;
   }) => Promise<void> | void;
   error?: string | null;
 };
@@ -29,6 +36,7 @@ export function WorkspaceOverview({
   onOpenAnother,
   onValidate,
   onAddSourceAccount,
+  onImportStatementRows,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -102,6 +110,10 @@ export function WorkspaceOverview({
 
       {onAddSourceAccount ? (
         <SourceAccountSetup onAddSourceAccount={onAddSourceAccount} />
+      ) : null}
+
+      {onImportStatementRows ? (
+        <CsvImportSetup onImportStatementRows={onImportStatementRows} />
       ) : null}
 
       <div className="action-row">
