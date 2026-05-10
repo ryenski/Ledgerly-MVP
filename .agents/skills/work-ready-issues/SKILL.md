@@ -46,8 +46,8 @@ For each selected issue:
 4. Run focused tests first, then the repo's normal verification for the touched area. If verification cannot run, record the reason.
 5. Open a PR against `main`. Include `Closes #<issue-number>` in the PR body so merge closes the issue.
 6. Request or perform code review as the project permits.
-7. Post the code review result to the issue, not only the PR. Include findings, severity, and verification status.
-8. Address every actionable review finding. If a finding is invalid, explain why in the issue comment or PR thread.
+7. Post the code review result to the PR. Include findings, severity, and verification status.
+8. Address every actionable review finding. If a finding is invalid, explain why in the PR thread.
 9. Repeat review and fix cycles until there are no unresolved actionable findings.
 10. Merge the PR into `main` after required checks pass and review is clear.
 11. Update local `main` after the merge, then select the next ready issue.
@@ -62,7 +62,7 @@ Use a real code-review stance:
 - If there are no findings, say that clearly and note remaining test gaps or residual risk.
 - Treat review findings as blocking until fixed, explicitly declined with reasoning, or made out of scope by the user.
 
-When posting review to the issue, use this shape:
+When posting review to the PR, use this shape:
 
 ```markdown
 Code review for PR #<pr-number>:
