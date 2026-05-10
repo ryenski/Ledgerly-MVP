@@ -39,6 +39,18 @@ export type CsvImportResult = {
 };
 
 export type SuggestedEntry = {
+  kind: "standard" | "transfer";
+  statementRowId: string;
+  postedDate: string;
+  description: string;
+  sourceAccount: string;
+  sourceAmount: string;
+  sourceFileName: string;
+  importFingerprint: string;
+  linkedStatementRow?: LinkedStatementRow | null;
+};
+
+export type LinkedStatementRow = {
   statementRowId: string;
   postedDate: string;
   description: string;
@@ -52,6 +64,12 @@ export type ApproveSuggestedEntryInput = {
   workspaceRootPath: string;
   statementRowId: string;
   ledgerAccount: string;
+};
+
+export type ApproveTransferEntryInput = {
+  workspaceRootPath: string;
+  statementRowId: string;
+  linkedStatementRowId: string;
 };
 
 export type BrokenProvenance = {

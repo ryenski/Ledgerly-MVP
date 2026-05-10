@@ -43,6 +43,9 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       async approveSuggestedEntry() {
         return workspace;
       },
+      async approveTransferEntry() {
+        return workspace;
+      },
       async pickDirectory() {
         return "/tmp";
       },

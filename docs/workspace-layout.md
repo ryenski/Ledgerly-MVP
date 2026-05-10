@@ -56,6 +56,10 @@ Imported Statement Rows are not Beancount ledger entries. Approval remains the l
 
 Approval writes non-transfer Suggested Entries to `transactions/YYYY-MM.bean` based on the Statement Row posted date and ensures `main.bean` includes that Monthly Transaction File. Each approved entry includes the Source Account posting from the Statement Row and a balancing posting to the Founder-Operator selected Ledger Account.
 
+Transfer Match approval writes one balanced Transfer Entry between two Source Accounts when Ledgerly finds opposite-signed same-date Statement Rows across different Source Accounts and the Founder-Operator explicitly approves the match. Both linked Statement Rows are marked `accounted` with the same Ledgerly entry id and monthly ledger file path.
+
+One-sided transfer hints can appear when an unmatched Statement Row looks like a transfer or payment, but those hints do not claim another row and cannot write a Transfer Entry until a linked Statement Row exists.
+
 After Approval, the source Statement Row status changes from `pending` to `accounted` in the Staging Area. Ledgerly also stores the approved `ledgerly_entry_id` and monthly ledger file path with the Statement Row so the Staging Area can link back to the readable Beancount entry.
 
 Ledgerly-written entries include minimal Beancount metadata:

@@ -12,7 +12,14 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SuggestedEntry {
+pub enum SuggestedEntryKind {
+    Standard,
+    Transfer,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedStatementRow {
     pub statement_row_id: String,
     pub posted_date: String,
     pub description: String,
@@ -24,10 +31,32 @@ pub struct SuggestedEntry {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SuggestedEntry {
+    pub kind: SuggestedEntryKind,
+    pub statement_row_id: String,
+    pub posted_date: String,
+    pub description: String,
+    pub source_account: String,
+    pub source_amount: String,
+    pub source_file_name: String,
+    pub import_fingerprint: String,
+    pub linked_statement_row: Option<LinkedStatementRow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ApproveSuggestedEntryInput {
     pub workspace_root_path: String,
     pub statement_row_id: String,
     pub ledger_account: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApproveTransferEntryInput {
+    pub workspace_root_path: String,
+    pub statement_row_id: String,
+    pub linked_statement_row_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -49,28 +78,8 @@ pub fn get_suggested_entries(
     )?;
     ensure_import_tables(&connection)?;
     ensure_provenance_columns(&connection)?;
-    let mut statement = connection.prepare(
-        "
-        select id, posted_date, description, source_account, source_amount, source_file_name, import_fingerprint
-        from statement_rows
-        where status = 'pending'
-        order by posted_date, description
-        ",
-    )?;
-    let entries = statement
-        .query_map([], |row| {
-            Ok(SuggestedEntry {
-                statement_row_id: row.get(0)?,
-                posted_date: row.get(1)?,
-                description: row.get(2)?,
-                source_account: row.get(3)?,
-                source_amount: row.get(4)?,
-                source_file_name: row.get(5)?,
-                import_fingerprint: row.get(6)?,
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(entries)
+    let pending_rows = load_pending_statement_rows(&connection)?;
+    Ok(build_suggested_entries(pending_rows)?)
 }
 
 pub fn get_broken_provenance(
@@ -177,6 +186,140 @@ pub fn approve_suggested_entry(
     open_workspace(root)
 }
 
+pub fn approve_transfer_entry(
+    input: ApproveTransferEntryInput,
+) -> Result<WorkspaceSummary, WorkspaceError> {
+    let root = Path::new(&input.workspace_root_path);
+    let validation = validate_workspace(root)?;
+    if validation.status == LedgerStatus::Invalid {
+        return Err(WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            "Approval is blocked while the Workspace is in Invalid Ledger State.",
+        ));
+    }
+
+    let connection = Connection::open(root.join(".ledgerly").join("ledgerly.sqlite"))?;
+    ensure_import_tables(&connection)?;
+    ensure_provenance_columns(&connection)?;
+    let first = load_pending_suggested_entry(&connection, &input.statement_row_id)?;
+    let second = load_pending_suggested_entry(&connection, &input.linked_statement_row_id)?;
+    ensure_transfer_match(&first, &second)?;
+    let ledgerly_entry_id = Uuid::new_v4().to_string();
+
+    let monthly_relative_path = monthly_transaction_file(&first.posted_date)?;
+    let monthly_path = root.join(&monthly_relative_path);
+    if let Some(parent) = monthly_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    ensure_main_includes(root, &monthly_relative_path)?;
+    append_transfer_entry(&monthly_path, &first, &second, &ledgerly_entry_id)?;
+
+    connection.execute(
+        "
+        update statement_rows
+        set status = 'accounted',
+            ledgerly_entry_id = ?3,
+            ledger_entry_file = ?4
+        where id in (?1, ?2)
+        ",
+        (
+            input.statement_row_id,
+            input.linked_statement_row_id,
+            ledgerly_entry_id,
+            monthly_relative_path,
+        ),
+    )?;
+
+    open_workspace(root)
+}
+
+fn load_pending_statement_rows(
+    connection: &Connection,
+) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
+    let mut statement = connection.prepare(
+        "
+        select id, posted_date, description, source_account, source_amount, source_file_name, import_fingerprint
+        from statement_rows
+        where status = 'pending'
+        order by posted_date, description
+        ",
+    )?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(SuggestedEntry {
+                kind: SuggestedEntryKind::Standard,
+                statement_row_id: row.get(0)?,
+                posted_date: row.get(1)?,
+                description: row.get(2)?,
+                source_account: row.get(3)?,
+                source_amount: row.get(4)?,
+                source_file_name: row.get(5)?,
+                import_fingerprint: row.get(6)?,
+                linked_statement_row: None,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn build_suggested_entries(
+    rows: Vec<SuggestedEntry>,
+) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
+    let mut suggestions = Vec::new();
+    let mut consumed = vec![false; rows.len()];
+
+    for (index, row) in rows.iter().enumerate() {
+        if consumed[index] {
+            continue;
+        }
+        if let Some(linked_index) =
+            rows.iter()
+                .enumerate()
+                .position(|(candidate_index, candidate)| {
+                    candidate_index != index
+                        && !consumed[candidate_index]
+                        && is_transfer_match(row, candidate)
+                })
+        {
+            let linked = rows[linked_index].clone();
+            consumed[index] = true;
+            consumed[linked_index] = true;
+            let mut transfer = row.clone();
+            transfer.kind = SuggestedEntryKind::Transfer;
+            transfer.linked_statement_row = Some(linked_statement_row(linked));
+            suggestions.push(transfer);
+            continue;
+        }
+
+        if looks_like_one_sided_transfer(row) {
+            let mut transfer = row.clone();
+            transfer.kind = SuggestedEntryKind::Transfer;
+            consumed[index] = true;
+            suggestions.push(transfer);
+            continue;
+        }
+    }
+
+    for (index, row) in rows.into_iter().enumerate() {
+        if !consumed[index] {
+            suggestions.push(row);
+        }
+    }
+    Ok(suggestions)
+}
+
+fn linked_statement_row(row: SuggestedEntry) -> LinkedStatementRow {
+    LinkedStatementRow {
+        statement_row_id: row.statement_row_id,
+        posted_date: row.posted_date,
+        description: row.description,
+        source_account: row.source_account,
+        source_amount: row.source_amount,
+        source_file_name: row.source_file_name,
+        import_fingerprint: row.import_fingerprint,
+    }
+}
+
 fn load_pending_suggested_entry(
     connection: &Connection,
     statement_row_id: &str,
@@ -191,6 +334,7 @@ fn load_pending_suggested_entry(
             [statement_row_id],
             |row| {
                 Ok(SuggestedEntry {
+                    kind: SuggestedEntryKind::Standard,
                     statement_row_id: row.get(0)?,
                     posted_date: row.get(1)?,
                     description: row.get(2)?,
@@ -198,6 +342,7 @@ fn load_pending_suggested_entry(
                     source_amount: row.get(4)?,
                     source_file_name: row.get(5)?,
                     import_fingerprint: row.get(6)?,
+                    linked_statement_row: None,
                 })
             },
         )
@@ -230,6 +375,37 @@ fn parse_amount(value: &str) -> Result<f64, WorkspaceError> {
             "Suggested Entry amount must be numeric.",
         )
     })
+}
+
+fn ensure_transfer_match(
+    first: &SuggestedEntry,
+    second: &SuggestedEntry,
+) -> Result<(), WorkspaceError> {
+    if is_transfer_match(first, second) {
+        return Ok(());
+    }
+    Err(WorkspaceError::new(
+        WorkspaceErrorCode::InvalidLedger,
+        "Transfer approval requires two opposite Statement Rows from different Source Accounts.",
+    ))
+}
+
+fn is_transfer_match(first: &SuggestedEntry, second: &SuggestedEntry) -> bool {
+    if first.source_account == second.source_account || first.posted_date != second.posted_date {
+        return false;
+    }
+    let Ok(first_amount) = parse_amount(&first.source_amount) else {
+        return false;
+    };
+    let Ok(second_amount) = parse_amount(&second.source_amount) else {
+        return false;
+    };
+    (first_amount + second_amount).abs() < 0.005
+}
+
+fn looks_like_one_sided_transfer(row: &SuggestedEntry) -> bool {
+    let description = row.description.to_lowercase();
+    description.contains("transfer") || description.contains("payment")
 }
 
 fn monthly_transaction_file(posted_date: &str) -> Result<String, WorkspaceError> {
@@ -277,6 +453,37 @@ fn append_approved_entry(
         suggested_entry.source_amount,
         ledger_account,
         balancing_amount
+    )
+    .map_err(WorkspaceError::from)
+}
+
+fn append_transfer_entry(
+    monthly_path: &Path,
+    first: &SuggestedEntry,
+    second: &SuggestedEntry,
+    ledgerly_entry_id: &str,
+) -> Result<(), WorkspaceError> {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(monthly_path)?;
+    writeln!(
+        file,
+        "\n{} * \"Transfer: {} / {}\"\n  ledgerly_entry_id: \"{}\"\n  import_fingerprint: \"{}\"\n  source_account: \"{}\"\n  source_file_name: \"{}\"\n  linked_import_fingerprint: \"{}\"\n  linked_source_account: \"{}\"\n  linked_source_file_name: \"{}\"\n  {}  {} USD\n  {}  {} USD",
+        first.posted_date,
+        first.description,
+        second.description,
+        ledgerly_entry_id,
+        first.import_fingerprint,
+        first.source_account,
+        first.source_file_name,
+        second.import_fingerprint,
+        second.source_account,
+        second.source_file_name,
+        first.source_account,
+        first.source_amount,
+        second.source_account,
+        second.source_amount
     )
     .map_err(WorkspaceError::from)
 }
@@ -347,12 +554,23 @@ fn entry_has_matching_metadata(
     };
 
     entry.contains(&format!("  ledgerly_entry_id: \"{ledgerly_entry_id}\""))
-        && entry.contains(&format!(
+        && (entry.contains(&format!(
             "  import_fingerprint: \"{}\"",
             row.import_fingerprint
-        ))
-        && entry.contains(&format!("  source_account: \"{}\"", row.source_account))
-        && entry.contains(&format!("  source_file_name: \"{}\"", row.source_file_name))
+        )) || entry.contains(&format!(
+            "  linked_import_fingerprint: \"{}\"",
+            row.import_fingerprint
+        )))
+        && (entry.contains(&format!("  source_account: \"{}\"", row.source_account))
+            || entry.contains(&format!(
+                "  linked_source_account: \"{}\"",
+                row.source_account
+            )))
+        && (entry.contains(&format!("  source_file_name: \"{}\"", row.source_file_name))
+            || entry.contains(&format!(
+                "  linked_source_file_name: \"{}\"",
+                row.source_file_name
+            )))
 }
 
 fn ledger_entry_block<'a>(contents: &'a str, ledgerly_entry_id: &str) -> Option<&'a str> {
@@ -371,8 +589,9 @@ fn ledger_entry_block<'a>(contents: &'a str, ledgerly_entry_id: &str) -> Option<
 #[cfg(test)]
 mod tests {
     use crate::workspace::approval::{
-        approve_suggested_entry, get_broken_provenance, get_suggested_entries,
-        ApproveSuggestedEntryInput,
+        approve_suggested_entry, approve_transfer_entry, get_broken_provenance,
+        get_suggested_entries, ApproveSuggestedEntryInput, ApproveTransferEntryInput,
+        SuggestedEntryKind,
     };
     use crate::workspace::create::create_workspace;
     use crate::workspace::imports::{import_statement_rows, CsvImportInput, CsvSourceMappingInput};
@@ -420,6 +639,7 @@ mod tests {
 
         let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
         assert_eq!(suggested_entries.len(), 1);
+        assert_eq!(suggested_entries[0].kind, SuggestedEntryKind::Standard);
         assert_eq!(
             suggested_entries[0].source_account,
             "Assets:Bank:Operating-Checking"
@@ -470,6 +690,151 @@ mod tests {
         assert!(get_broken_provenance(&created.root_path)
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn suggests_and_approves_transfer_match_between_source_accounts() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::CreditCard,
+            name: "Business Card".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-07,Credit card payment,-100.00\n"
+                .to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Liabilities:CreditCards:Business-Card".to_string(),
+            source_file_name: "card.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-07,Payment received,100.00\n"
+                .to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+
+        let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
+        assert_eq!(suggested_entries.len(), 1);
+        assert_eq!(suggested_entries[0].kind, SuggestedEntryKind::Transfer);
+        let linked = suggested_entries[0].linked_statement_row.as_ref().unwrap();
+        assert_eq!(
+            linked.source_account,
+            "Liabilities:CreditCards:Business-Card"
+        );
+
+        let summary = approve_transfer_entry(ApproveTransferEntryInput {
+            workspace_root_path: created.root_path.clone(),
+            statement_row_id: suggested_entries[0].statement_row_id.clone(),
+            linked_statement_row_id: linked.statement_row_id.clone(),
+        })
+        .unwrap();
+
+        assert_eq!(summary.ledger_status, LedgerStatus::Valid);
+        let contents =
+            fs::read_to_string(Path::new(&created.root_path).join("transactions/2026-01.bean"))
+                .unwrap();
+        assert!(contents.contains("Transfer: Credit card payment / Payment received"));
+        assert!(contents.contains("Assets:Bank:Operating-Checking  -100.00 USD"));
+        assert!(contents.contains("Liabilities:CreditCards:Business-Card  100.00 USD"));
+        assert!(contents.contains("linked_import_fingerprint"));
+        assert!(contents.contains("linked_source_account"));
+
+        let connection = Connection::open(
+            Path::new(&created.root_path)
+                .join(".ledgerly")
+                .join("ledgerly.sqlite"),
+        )
+        .unwrap();
+        let accounted_count: i64 = connection
+            .query_row(
+                "select count(*) from statement_rows where status = 'accounted'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(accounted_count, 2);
+        assert!(get_broken_provenance(&created.root_path)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn shows_one_sided_transfer_without_claiming_another_row() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-07,Transfer to savings,-100.00\n"
+                .to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+
+        let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
+        assert_eq!(suggested_entries.len(), 1);
+        assert_eq!(suggested_entries[0].kind, SuggestedEntryKind::Transfer);
+        assert!(suggested_entries[0].linked_statement_row.is_none());
     }
 
     #[test]

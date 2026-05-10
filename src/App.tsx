@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import {
   addSourceAccount,
+  approveTransferEntry,
   approveSuggestedEntry,
   createWorkspace,
   getBrokenProvenance,
@@ -153,6 +154,25 @@ export default function App() {
     }
   }
 
+  async function handleApproveTransferEntry(input: {
+    statementRowId: string;
+    linkedStatementRowId: string;
+  }) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      const updated = await approveTransferEntry({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      setWorkspace(updated);
+      setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
+      setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
   useEffect(() => {
     if (view !== "overview" || !workspace) return;
 
@@ -214,6 +234,7 @@ export default function App() {
           onAddSourceAccount={handleAddSourceAccount}
           onImportStatementRows={handleImportStatementRows}
           onApproveSuggestedEntry={handleApproveSuggestedEntry}
+          onApproveTransferEntry={handleApproveTransferEntry}
           onOpenAnother={() => {
             setError(null);
             setView("open");
