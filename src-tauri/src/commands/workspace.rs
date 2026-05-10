@@ -1,5 +1,5 @@
 use crate::workspace::approval::{
-    self, ApproveSuggestedEntryInput, BrokenProvenance, SuggestedEntry,
+    self, ApproveSuggestedEntryInput, ApproveTransferEntryInput, BrokenProvenance, SuggestedEntry,
 };
 use crate::workspace::create;
 use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
@@ -51,6 +51,13 @@ pub fn approve_suggested_entry(
     input: ApproveSuggestedEntryInput,
 ) -> Result<WorkspaceSummary, WorkspaceError> {
     approval::approve_suggested_entry(input)
+}
+
+#[tauri::command]
+pub fn approve_transfer_entry(
+    input: ApproveTransferEntryInput,
+) -> Result<WorkspaceSummary, WorkspaceError> {
+    approval::approve_transfer_entry(input)
 }
 
 #[cfg(test)]

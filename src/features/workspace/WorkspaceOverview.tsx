@@ -31,6 +31,10 @@ type WorkspaceOverviewProps = {
     statementRowId: string;
     ledgerAccount: string;
   }) => Promise<void> | void;
+  onApproveTransferEntry?: (input: {
+    statementRowId: string;
+    linkedStatementRowId: string;
+  }) => Promise<void> | void;
   error?: string | null;
 };
 
@@ -52,6 +56,7 @@ export function WorkspaceOverview({
   onAddSourceAccount,
   onImportStatementRows,
   onApproveSuggestedEntry,
+  onApproveTransferEntry,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -160,6 +165,7 @@ export function WorkspaceOverview({
           suggestedEntries={suggestedEntries}
           ledgerStatus={workspace.ledgerStatus}
           onApprove={onApproveSuggestedEntry}
+          onApproveTransfer={onApproveTransferEntry}
         />
       ) : null}
 

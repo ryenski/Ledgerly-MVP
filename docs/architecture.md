@@ -165,11 +165,11 @@ sequenceDiagram
   API-->>UI: CsvImportResult
   UI-->>User: CSV import complete with imported and skipped counts
 
-  User->>UI: Review Suggested Entry
+  User->>UI: Review Suggested Entry or Transfer Match
   UI->>API: getSuggestedEntries(path)
   API->>Cmd: invoke("get_suggested_entries")
   Cmd->>Core: approval::get_suggested_entries(path)
-  Core-->>UI: Entry Preview and Journal Detail
+  Core-->>UI: Standard Suggested Entries and explicit Transfer Matches
   User->>UI: Approve Entry
   UI->>API: approveSuggestedEntry(input)
   API->>Cmd: invoke("approve_suggested_entry")
@@ -179,6 +179,15 @@ sequenceDiagram
   Core->>Disk: write Ledgerly Entry Metadata
   Core->>Disk: ensure main.bean includes month file
   Core->>Disk: mark Statement Row accounted with approved entry id and file
+  Core-->>UI: Refreshed Workspace summary
+
+  User->>UI: Approve Transfer
+  UI->>API: approveTransferEntry(input)
+  API->>Cmd: invoke("approve_transfer_entry")
+  Cmd->>Core: approval::approve_transfer_entry(input)
+  Core->>Core: validate opposite Source Account rows
+  Core->>Disk: append one balanced Transfer Entry
+  Core->>Disk: mark both Statement Rows accounted
   Core-->>UI: Refreshed Workspace summary
 
   UI->>API: getBrokenProvenance(path)
@@ -231,8 +240,10 @@ flowchart LR
   LedgerlyManaged --> OpenWorkspace[Open App-Created Workspace]
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
-  StatementRows --> SuggestedEntries[Suggested Entries]
+  StatementRows --> SuggestedEntries[Standard Suggested Entries]
+  StatementRows --> TransferMatches[User-approved Transfer Matches]
   StatementRows --> ProvenanceCheck[Broken Provenance Check]
+  TransferMatches --> FutureMonthly
   ProvenanceCheck --> FutureMonthly
 ```
 
@@ -268,6 +279,8 @@ sequenceDiagram
 - The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
 - Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
+- Transfer Matches are suggested from opposite-signed same-date Statement Rows across different Source Accounts, never auto-approved, and approved as one balanced Beancount Transfer Entry that marks both linked Statement Rows accounted.
+- One-sided transfer hints can appear when a Statement Row description looks like a transfer or payment, but they do not claim another row or write an approval without a linked match.
 - Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
 - Broken Provenance is surfaced separately from structural Ledger Validation by scanning accounted Statement Rows against Ledgerly Entry Metadata in the readable ledger files.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
@@ -286,6 +299,7 @@ sequenceDiagram
 - CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
+- Approved transfers write one transaction between the two Source Accounts and mark both linked Statement Rows accounted with the same Ledgerly entry id and ledger file path.
 - Raw CSV row details, AI explanations, and confidence scores remain in Ledgerly-managed local data and are not written as Beancount metadata.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

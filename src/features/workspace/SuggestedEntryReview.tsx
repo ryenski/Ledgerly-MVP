@@ -9,12 +9,17 @@ type SuggestedEntryReviewProps = {
     statementRowId: string;
     ledgerAccount: string;
   }) => Promise<void> | void;
+  onApproveTransfer?: (input: {
+    statementRowId: string;
+    linkedStatementRowId: string;
+  }) => Promise<void> | void;
 };
 
 export function SuggestedEntryReview({
   suggestedEntries,
   ledgerStatus,
   onApprove,
+  onApproveTransfer,
 }: SuggestedEntryReviewProps) {
   if (suggestedEntries.length === 0) {
     return null;
@@ -34,6 +39,7 @@ export function SuggestedEntryReview({
             entry={entry}
             ledgerStatus={ledgerStatus}
             onApprove={onApprove}
+            onApproveTransfer={onApproveTransfer}
           />
         ))}
       </div>
@@ -45,6 +51,7 @@ function SuggestedEntryCard({
   entry,
   ledgerStatus,
   onApprove,
+  onApproveTransfer,
 }: {
   entry: SuggestedEntry;
   ledgerStatus: LedgerStatus;
@@ -52,11 +59,17 @@ function SuggestedEntryCard({
     statementRowId: string;
     ledgerAccount: string;
   }) => Promise<void> | void;
+  onApproveTransfer?: (input: {
+    statementRowId: string;
+    linkedStatementRowId: string;
+  }) => Promise<void> | void;
 }) {
   const [ledgerAccount, setLedgerAccount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const balancingAmount = invertAmount(entry.sourceAmount);
   const approvalBlocked = ledgerStatus === "invalid";
+  const isTransfer = entry.kind === "transfer";
+  const linkedRow = entry.linkedStatementRow;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,46 +87,94 @@ function SuggestedEntryCard({
     }
   }
 
+  async function handleTransferApproval() {
+    if (approvalBlocked || !linkedRow || !onApproveTransfer) return;
+
+    setIsSubmitting(true);
+    try {
+      await onApproveTransfer({
+        statementRowId: entry.statementRowId,
+        linkedStatementRowId: linkedRow.statementRowId,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <article className="suggested-entry-card">
       <div>
-        <p className="eyebrow">Entry Preview</p>
+        <p className="eyebrow">{isTransfer ? "Transfer Match" : "Entry Preview"}</p>
         <h3>{entry.description}</h3>
         <p>{entry.postedDate}</p>
       </div>
 
       <div className="journal-detail">
         <p className="eyebrow">Journal Detail</p>
-        <dl>
-          <div>
-            <dt>{entry.sourceAccount}</dt>
-            <dd>{entry.sourceAmount} USD</dd>
-          </div>
-          <div>
-            <dt>{ledgerAccount || "Selected Ledger Account"}</dt>
-            <dd>{balancingAmount} USD</dd>
-          </div>
-        </dl>
+        {isTransfer ? (
+          <dl>
+            <div>
+              <dt>{entry.sourceAccount}</dt>
+              <dd>
+                {entry.sourceAmount} USD - {entry.description}
+              </dd>
+            </div>
+            <div>
+              <dt>{linkedRow?.sourceAccount || "Matched Source Account"}</dt>
+              <dd>
+                {linkedRow
+                  ? `${linkedRow.sourceAmount} USD - ${linkedRow.description}`
+                  : "Awaiting matching row"}
+              </dd>
+            </div>
+          </dl>
+        ) : (
+          <dl>
+            <div>
+              <dt>{entry.sourceAccount}</dt>
+              <dd>{entry.sourceAmount} USD</dd>
+            </div>
+            <div>
+              <dt>{ledgerAccount || "Selected Ledger Account"}</dt>
+              <dd>{balancingAmount} USD</dd>
+            </div>
+          </dl>
+        )}
       </div>
 
-      <form className="workspace-form" onSubmit={handleSubmit}>
-        <label>
-          Ledger Account
-          <input
-            value={ledgerAccount}
-            onChange={(event) => setLedgerAccount(event.target.value)}
-            placeholder="Expenses:Software"
-          />
-        </label>
-
+      {isTransfer ? (
         <button
           className="primary-button"
-          type="submit"
-          disabled={approvalBlocked || !ledgerAccount.trim() || isSubmitting}
+          type="button"
+          disabled={approvalBlocked || !linkedRow || !onApproveTransfer || isSubmitting}
+          onClick={handleTransferApproval}
         >
-          {approvalBlocked ? "Approval blocked" : "Approve Entry"}
+          {approvalBlocked
+            ? "Approval blocked"
+            : linkedRow
+              ? "Approve Transfer"
+              : "Needs matching row"}
         </button>
-      </form>
+      ) : (
+        <form className="workspace-form" onSubmit={handleSubmit}>
+          <label>
+            Ledger Account
+            <input
+              value={ledgerAccount}
+              onChange={(event) => setLedgerAccount(event.target.value)}
+              placeholder="Expenses:Software"
+            />
+          </label>
+
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={approvalBlocked || !ledgerAccount.trim() || isSubmitting}
+          >
+            {approvalBlocked ? "Approval blocked" : "Approve Entry"}
+          </button>
+        </form>
+      )}
     </article>
   );
 }

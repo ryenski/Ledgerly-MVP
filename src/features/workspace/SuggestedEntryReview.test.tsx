@@ -6,6 +6,7 @@ import type { SuggestedEntry } from "../../lib/workspace/types";
 
 const suggestedEntries: SuggestedEntry[] = [
   {
+    kind: "standard",
     statementRowId: "row-1",
     postedDate: "2026-01-04",
     description: "Software",
@@ -51,5 +52,73 @@ describe("SuggestedEntryReview", () => {
     );
 
     expect(screen.getByRole("button", { name: "Approval blocked" })).toBeDisabled();
+  });
+
+  it("shows a matched transfer and approves both linked Statement Rows", async () => {
+    const user = userEvent.setup();
+    const onApproveTransfer = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <SuggestedEntryReview
+        suggestedEntries={[
+          {
+            kind: "transfer",
+            statementRowId: "row-1",
+            postedDate: "2026-01-04",
+            description: "Credit card payment",
+            sourceAccount: "Assets:Bank:Operating-Checking",
+            sourceAmount: "-100.00",
+            sourceFileName: "checking.csv",
+            importFingerprint: "checking-fingerprint",
+            linkedStatementRow: {
+              statementRowId: "row-2",
+              postedDate: "2026-01-04",
+              description: "Payment received",
+              sourceAccount: "Liabilities:CreditCards:Business-Card",
+              sourceAmount: "100.00",
+              sourceFileName: "card.csv",
+              importFingerprint: "card-fingerprint",
+            },
+          },
+        ]}
+        ledgerStatus="valid"
+        onApprove={vi.fn()}
+        onApproveTransfer={onApproveTransfer}
+      />,
+    );
+
+    expect(screen.getByText("Transfer Match")).toBeInTheDocument();
+    expect(screen.getByText("Liabilities:CreditCards:Business-Card")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Approve Transfer" }));
+
+    expect(onApproveTransfer).toHaveBeenCalledWith({
+      statementRowId: "row-1",
+      linkedStatementRowId: "row-2",
+    });
+  });
+
+  it("shows one-sided transfer suggestions without allowing approval", () => {
+    render(
+      <SuggestedEntryReview
+        suggestedEntries={[
+          {
+            kind: "transfer",
+            statementRowId: "row-1",
+            postedDate: "2026-01-04",
+            description: "Transfer to savings",
+            sourceAccount: "Assets:Bank:Operating-Checking",
+            sourceAmount: "-100.00",
+            sourceFileName: "checking.csv",
+            importFingerprint: "checking-fingerprint",
+            linkedStatementRow: null,
+          },
+        ]}
+        ledgerStatus="valid"
+        onApprove={vi.fn()}
+        onApproveTransfer={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Needs matching row" })).toBeDisabled();
   });
 });

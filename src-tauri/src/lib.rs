@@ -11,7 +11,8 @@ pub fn run() {
             commands::workspace::import_statement_rows,
             commands::workspace::get_suggested_entries,
             commands::workspace::get_broken_provenance,
-            commands::workspace::approve_suggested_entry
+            commands::workspace::approve_suggested_entry,
+            commands::workspace::approve_transfer_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ledgerly");
