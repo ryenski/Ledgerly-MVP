@@ -1,6 +1,7 @@
 pub mod beancount;
 pub mod create;
 pub mod errors;
+pub mod imports;
 pub mod open;
 pub mod paths;
 pub mod source_accounts;

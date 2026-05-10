@@ -14,6 +14,29 @@ export type AddSourceAccountInput = {
   openingBalance?: string | null;
 };
 
+export type CsvSourceMappingInput = {
+  postedDateColumn: string;
+  descriptionColumn: string;
+  amountColumn: string;
+  memoColumn?: string | null;
+  referenceIdColumn?: string | null;
+  payeeColumn?: string | null;
+  categoryColumn?: string | null;
+};
+
+export type CsvImportInput = {
+  workspaceRootPath: string;
+  sourceAccount: string;
+  sourceFileName: string;
+  csvContents: string;
+  mapping?: CsvSourceMappingInput | null;
+};
+
+export type CsvImportResult = {
+  sourceAccount: string;
+  importedCount: number;
+};
+
 export type WorkspaceManifest = {
   schemaVersion: 1;
   appCreated: true;

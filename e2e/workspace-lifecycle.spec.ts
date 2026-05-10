@@ -27,6 +27,9 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       async addSourceAccount() {
         return workspace;
       },
+      async importStatementRows() {
+        return { sourceAccount: "Assets:Bank:Operating-Checking", importedCount: 2 };
+      },
       async pickDirectory() {
         return "/tmp";
       },

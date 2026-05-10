@@ -17,6 +17,7 @@ flowchart TB
       WorkspaceTypes[src/lib/workspace/types.ts]
       InvalidLedgerUI[Invalid Ledger State UI]
       SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
+      CsvImportSetup[src/features/workspace/CsvImportSetup.tsx]
     end
 
     subgraph TauriRuntime[Tauri Runtime]
@@ -28,6 +29,7 @@ flowchart TB
       Open[src-tauri/src/workspace/open.rs]
       Validation[src-tauri/src/workspace/validation.rs]
       SourceAccounts[src-tauri/src/workspace/source_accounts.rs]
+      CsvImports[src-tauri/src/workspace/imports.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
       Types[src-tauri/src/workspace/types.rs]
@@ -60,11 +62,13 @@ flowchart TB
   WorkspaceScreens --> WorkspaceApi
   WorkspaceScreens --> InvalidLedgerUI
   WorkspaceScreens --> SourceAccountSetup
+  WorkspaceScreens --> CsvImportSetup
   WorkspaceApi --> Commands
   Commands --> Create
   Commands --> Open
   Commands --> Validation
   Commands --> SourceAccounts
+  Commands --> CsvImports
   Create --> Beancount
   Create --> Paths
   Create --> Types
@@ -72,6 +76,7 @@ flowchart TB
   Open --> Validation
   SourceAccounts --> Open
   SourceAccounts --> Validation
+  CsvImports --> Types
   Open --> Types
   Open --> Errors
   Validation --> Errors
@@ -82,8 +87,10 @@ flowchart TB
   Validation --> OpeningBalances
   InvalidLedgerUI --> WorkspaceApi
   SourceAccountSetup --> WorkspaceApi
+  CsvImportSetup --> WorkspaceApi
   SourceAccounts --> AccountsBean
   SourceAccounts --> OpeningBalances
+  CsvImports --> Sqlite
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -134,6 +141,17 @@ sequenceDiagram
   API-->>UI: WorkspaceSummary
   UI-->>User: Refreshed Workspace overview
 
+  User->>UI: Import CSV Statement Rows
+  UI->>API: importStatementRows(input)
+  API->>Cmd: invoke("import_statement_rows")
+  Cmd->>Core: imports::import_statement_rows(input)
+  Core->>Disk: save Source Mapping in SQLite
+  Core->>Disk: store normalized Statement Rows in Staging Area
+  Core-->>Cmd: CsvImportResult
+  Cmd-->>API: CsvImportResult
+  API-->>UI: CsvImportResult
+  UI-->>User: CSV import complete
+
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
   API->>Cmd: invoke("open_workspace")
@@ -166,6 +184,8 @@ flowchart LR
   subgraph CurrentSqlite[Current SQLite Tables]
     Metadata[workspace_metadata]
     OperationLog[operation_log]
+    SourceMappings[source_mappings]
+    StatementRows[statement_rows]
     StagingPlaceholder[staging_area_placeholder]
     MappingPlaceholder[source_mappings_placeholder]
     RulesPlaceholder[categorization_rules_placeholder]
@@ -175,6 +195,7 @@ flowchart LR
   SourceOfTruth --> Validation[Structural Ledger Validation]
   LedgerlyManaged --> OpenWorkspace[Open App-Created Workspace]
   Sqlite --> CurrentSqlite
+  SourceMappings --> StatementRows
 ```
 
 ## Agent Issue Workflow
@@ -206,9 +227,10 @@ sequenceDiagram
 - React owns presentation state, forms, error rendering, and Workspace overview screens.
 - The Workspace overview renders Invalid Ledger State details from `WorkspaceSummary.ledgerValidation` and blocks unsafe Approval and MVP Report affordances while validation is invalid.
 - The Source Account setup UI collects bank or credit-card Source Accounts and optional Opening Balances, then refreshes the Workspace summary returned from the native write.
+- The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
-- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, and structural ledger validation with file-aware error messages.
+- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.
 - The Workspace folder owns all accounting data needed for this slice. No Ledgerly cloud account is required.
 - `.agents/skills/work-ready-issues/` owns the local AFK workflow for sequentially selecting, implementing, reviewing, merging, and continuing through GitHub issues labeled `ready-for-agent`.
 
@@ -219,5 +241,6 @@ sequenceDiagram
 - Validation is structural and local. It runs after Ledgerly creates a Workspace, when opening a Workspace, and when the UI rechecks the ledger after External Ledger Edits.
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
 - Source Account setup appends valid Beancount directives to the readable ledger files rather than storing canonical account setup only in SQLite.
+- CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

@@ -3,6 +3,7 @@ import { AppShell } from "./components/AppShell";
 import {
   addSourceAccount,
   createWorkspace,
+  importStatementRows,
   openWorkspace,
   pickDirectory,
   revealWorkspace,
@@ -10,6 +11,7 @@ import {
 } from "./lib/workspace/api";
 import type {
   SourceAccountKind,
+  CsvSourceMappingInput,
   WorkspaceCreateInput,
   WorkspaceSummary,
 } from "./lib/workspace/types";
@@ -97,6 +99,25 @@ export default function App() {
     }
   }
 
+  async function handleImportStatementRows(input: {
+    sourceAccount: string;
+    sourceFileName: string;
+    csvContents: string;
+    mapping: CsvSourceMappingInput;
+  }) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      await importStatementRows({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      await handleValidateWorkspace();
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
   useEffect(() => {
     if (view !== "overview" || !workspace) return;
 
@@ -154,6 +175,7 @@ export default function App() {
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}
+          onImportStatementRows={handleImportStatementRows}
           onOpenAnother={() => {
             setError(null);
             setView("open");

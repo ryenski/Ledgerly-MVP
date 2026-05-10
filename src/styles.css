@@ -18,6 +18,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -198,6 +199,7 @@ label {
 }
 
 input,
+textarea,
 select {
   min-height: 44px;
   width: 100%;
@@ -206,6 +208,12 @@ select {
   background: #ffffff;
   color: #17201c;
   padding: 0 12px;
+}
+
+textarea {
+  min-height: 132px;
+  padding: 12px;
+  resize: vertical;
 }
 
 .directory-field {
@@ -286,8 +294,15 @@ dd {
   padding-left: 20px;
 }
 
-.source-account-setup {
+.source-account-setup,
+.csv-import-setup {
   margin-top: 28px;
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 @media (max-width: 760px) {
@@ -310,7 +325,8 @@ dd {
   }
 
   .directory-field,
-  .detail-grid {
+  .detail-grid,
+  .mapping-grid {
     grid-template-columns: 1fr;
   }
 }
