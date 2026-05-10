@@ -24,6 +24,9 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       async validateWorkspace() {
         return { status: "valid", errors: [] };
       },
+      async addSourceAccount() {
+        return workspace;
+      },
       async pickDirectory() {
         return "/tmp";
       },

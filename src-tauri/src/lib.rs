@@ -6,7 +6,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::workspace::create_workspace,
             commands::workspace::open_workspace,
-            commands::workspace::validate_workspace
+            commands::workspace::validate_workspace,
+            commands::workspace::add_source_account
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ledgerly");

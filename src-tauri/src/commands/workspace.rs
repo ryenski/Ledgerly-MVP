@@ -1,5 +1,6 @@
 use crate::workspace::create;
 use crate::workspace::open;
+use crate::workspace::source_accounts::{self, AddSourceAccountInput};
 use crate::workspace::types::{CreateWorkspaceInput, LedgerValidationSummary, WorkspaceSummary};
 use crate::workspace::validation;
 use crate::workspace::WorkspaceError;
@@ -17,6 +18,13 @@ pub fn open_workspace(path: String) -> Result<WorkspaceSummary, WorkspaceError> 
 #[tauri::command]
 pub fn validate_workspace(path: String) -> Result<LedgerValidationSummary, WorkspaceError> {
     validation::validate_workspace(path)
+}
+
+#[tauri::command]
+pub fn add_source_account(
+    input: AddSourceAccountInput,
+) -> Result<WorkspaceSummary, WorkspaceError> {
+    source_accounts::add_source_account(input)
 }
 
 #[cfg(test)]
@@ -50,5 +58,27 @@ mod tests {
 
         let opened = open_workspace(created.root_path).unwrap();
         assert_eq!(opened.business_name, "Acme Studio");
+    }
+
+    #[test]
+    fn add_source_account_command_updates_workspace() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        let updated = add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path,
+            kind: crate::workspace::source_accounts::SourceAccountKind::CreditCard,
+            name: "Business Card".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+
+        assert_eq!(updated.ledger_status, crate::workspace::LedgerStatus::Valid);
     }
 }

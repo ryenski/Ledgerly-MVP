@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type {
+  AddSourceAccountInput,
   LedgerValidationSummary,
   WorkspaceCreateInput,
   WorkspaceSummary,
@@ -11,6 +12,7 @@ type WorkspaceApi = {
   createWorkspace: (input: WorkspaceCreateInput) => Promise<WorkspaceSummary>;
   openWorkspace: (path: string) => Promise<WorkspaceSummary>;
   validateWorkspace: (path: string) => Promise<LedgerValidationSummary>;
+  addSourceAccount: (input: AddSourceAccountInput) => Promise<WorkspaceSummary>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
 };
@@ -44,6 +46,15 @@ export async function validateWorkspace(
     return window.__LEDGERLY_TEST_API__.validateWorkspace(path);
   }
   return invoke<LedgerValidationSummary>("validate_workspace", { path });
+}
+
+export async function addSourceAccount(
+  input: AddSourceAccountInput,
+): Promise<WorkspaceSummary> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.addSourceAccount(input);
+  }
+  return invoke<WorkspaceSummary>("add_source_account", { input });
 }
 
 export async function pickDirectory(): Promise<string | null> {

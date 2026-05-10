@@ -16,6 +16,7 @@ flowchart TB
       WorkspaceApi[src/lib/workspace/api.ts]
       WorkspaceTypes[src/lib/workspace/types.ts]
       InvalidLedgerUI[Invalid Ledger State UI]
+      SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
     end
 
     subgraph TauriRuntime[Tauri Runtime]
@@ -26,6 +27,7 @@ flowchart TB
       Create[src-tauri/src/workspace/create.rs]
       Open[src-tauri/src/workspace/open.rs]
       Validation[src-tauri/src/workspace/validation.rs]
+      SourceAccounts[src-tauri/src/workspace/source_accounts.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
       Types[src-tauri/src/workspace/types.rs]
@@ -57,15 +59,19 @@ flowchart TB
   App --> WorkspaceScreens
   WorkspaceScreens --> WorkspaceApi
   WorkspaceScreens --> InvalidLedgerUI
+  WorkspaceScreens --> SourceAccountSetup
   WorkspaceApi --> Commands
   Commands --> Create
   Commands --> Open
   Commands --> Validation
+  Commands --> SourceAccounts
   Create --> Beancount
   Create --> Paths
   Create --> Types
   Create --> Errors
   Open --> Validation
+  SourceAccounts --> Open
+  SourceAccounts --> Validation
   Open --> Types
   Open --> Errors
   Validation --> Errors
@@ -75,6 +81,9 @@ flowchart TB
   Validation --> AccountsBean
   Validation --> OpeningBalances
   InvalidLedgerUI --> WorkspaceApi
+  SourceAccountSetup --> WorkspaceApi
+  SourceAccounts --> AccountsBean
+  SourceAccounts --> OpeningBalances
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -112,6 +121,18 @@ sequenceDiagram
   Cmd-->>API: LedgerValidationSummary
   API-->>UI: LedgerValidationSummary
   UI-->>User: Invalid Ledger State details and blocked unsafe actions
+
+  User->>UI: Add Source Account
+  UI->>API: addSourceAccount(input)
+  API->>Cmd: invoke("add_source_account")
+  Cmd->>Core: source_accounts::add_source_account(input)
+  Core->>Disk: append account open directive
+  Core->>Disk: append optional opening balance directive
+  Core->>Core: open::open_workspace(path)
+  Core-->>Cmd: WorkspaceSummary
+  Cmd-->>API: WorkspaceSummary
+  API-->>UI: WorkspaceSummary
+  UI-->>User: Refreshed Workspace overview
 
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
@@ -184,9 +205,10 @@ sequenceDiagram
 
 - React owns presentation state, forms, error rendering, and Workspace overview screens.
 - The Workspace overview renders Invalid Ledger State details from `WorkspaceSummary.ledgerValidation` and blocks unsafe Approval and MVP Report affordances while validation is invalid.
+- The Source Account setup UI collects bank or credit-card Source Accounts and optional Opening Balances, then refreshes the Workspace summary returned from the native write.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
-- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, and structural ledger validation with file-aware error messages.
+- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, and structural ledger validation with file-aware error messages.
 - The Workspace folder owns all accounting data needed for this slice. No Ledgerly cloud account is required.
 - `.agents/skills/work-ready-issues/` owns the local AFK workflow for sequentially selecting, implementing, reviewing, merging, and continuing through GitHub issues labeled `ready-for-agent`.
 
@@ -196,5 +218,6 @@ sequenceDiagram
 - `USD` is the only supported MVP currency.
 - Validation is structural and local. It runs after Ledgerly creates a Workspace, when opening a Workspace, and when the UI rechecks the ledger after External Ledger Edits.
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
+- Source Account setup appends valid Beancount directives to the readable ledger files rather than storing canonical account setup only in SQLite.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.
