@@ -147,4 +147,5 @@ flowchart LR
 - `USD` is the only supported MVP currency.
 - Validation is structural and local; full Beancount parser validation is deferred.
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
+- Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.
