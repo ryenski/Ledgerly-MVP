@@ -11,6 +11,8 @@ const suggestedEntries: SuggestedEntry[] = [
     description: "Software",
     sourceAccount: "Assets:Bank:Operating-Checking",
     sourceAmount: "-29.99",
+    sourceFileName: "checking.csv",
+    importFingerprint: "fingerprint-1",
   },
 ];
 

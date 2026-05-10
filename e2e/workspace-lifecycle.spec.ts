@@ -37,6 +37,9 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       async getSuggestedEntries() {
         return [];
       },
+      async getBrokenProvenance() {
+        return [];
+      },
       async approveSuggestedEntry() {
         return workspace;
       },

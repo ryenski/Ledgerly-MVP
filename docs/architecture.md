@@ -19,6 +19,7 @@ flowchart TB
       SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
       CsvImportSetup[src/features/workspace/CsvImportSetup.tsx]
       SuggestedEntryReview[src/features/workspace/SuggestedEntryReview.tsx]
+      BrokenProvenanceUI[Broken Provenance UI]
     end
 
     subgraph TauriRuntime[Tauri Runtime]
@@ -66,6 +67,7 @@ flowchart TB
   WorkspaceScreens --> SourceAccountSetup
   WorkspaceScreens --> CsvImportSetup
   WorkspaceScreens --> SuggestedEntryReview
+  WorkspaceScreens --> BrokenProvenanceUI
   WorkspaceApi --> Commands
   Commands --> Create
   Commands --> Open
@@ -83,6 +85,7 @@ flowchart TB
   CsvImports --> Types
   Approval --> Validation
   Approval --> Open
+  Approval --> Sqlite
   Open --> Types
   Open --> Errors
   Validation --> Errors
@@ -100,6 +103,7 @@ flowchart TB
   CsvImports --> Sqlite
   Approval --> Transactions
   Approval --> Sqlite
+  BrokenProvenanceUI --> WorkspaceApi
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -172,9 +176,16 @@ sequenceDiagram
   Cmd->>Core: approval::approve_suggested_entry(input)
   Core->>Core: validation::validate_workspace(path)
   Core->>Disk: append Monthly Transaction File entry
+  Core->>Disk: write Ledgerly Entry Metadata
   Core->>Disk: ensure main.bean includes month file
-  Core->>Disk: mark Statement Row accounted
+  Core->>Disk: mark Statement Row accounted with approved entry id and file
   Core-->>UI: Refreshed Workspace summary
+
+  UI->>API: getBrokenProvenance(path)
+  API->>Cmd: invoke("get_broken_provenance")
+  Cmd->>Core: approval::get_broken_provenance(path)
+  Core->>Disk: scan accounted Statement Rows and Ledgerly Entry Metadata
+  Core-->>UI: Broken Provenance rows without changing Ledger Validation status
 
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
@@ -209,7 +220,7 @@ flowchart LR
     Metadata[workspace_metadata]
     OperationLog[operation_log]
     SourceMappings[source_mappings]
-    StatementRows[statement_rows with import_fingerprint]
+    StatementRows[statement_rows with import_fingerprint and ledgerly_entry_id]
     StagingPlaceholder[staging_area_placeholder]
     MappingPlaceholder[source_mappings_placeholder]
     RulesPlaceholder[categorization_rules_placeholder]
@@ -221,6 +232,8 @@ flowchart LR
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
   StatementRows --> SuggestedEntries[Suggested Entries]
+  StatementRows --> ProvenanceCheck[Broken Provenance Check]
+  ProvenanceCheck --> FutureMonthly
 ```
 
 ## Agent Issue Workflow
@@ -255,6 +268,8 @@ sequenceDiagram
 - The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
 - Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
+- Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
+- Broken Provenance is surfaced separately from structural Ledger Validation by scanning accounted Statement Rows against Ledgerly Entry Metadata in the readable ledger files.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.
@@ -271,5 +286,6 @@ sequenceDiagram
 - CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
+- Raw CSV row details, AI explanations, and confidence scores remain in Ledgerly-managed local data and are not written as Beancount metadata.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

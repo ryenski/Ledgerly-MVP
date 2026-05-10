@@ -44,12 +44,20 @@ export type SuggestedEntry = {
   description: string;
   sourceAccount: string;
   sourceAmount: string;
+  sourceFileName: string;
+  importFingerprint: string;
 };
 
 export type ApproveSuggestedEntryInput = {
   workspaceRootPath: string;
   statementRowId: string;
   ledgerAccount: string;
+};
+
+export type BrokenProvenance = {
+  statementRowId: string;
+  ledgerlyEntryId?: string | null;
+  reason: string;
 };
 
 export type WorkspaceManifest = {

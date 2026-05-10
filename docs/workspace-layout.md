@@ -46,7 +46,7 @@ SQLite does not replace the ledger. It exists so later slices can add staging, s
 The CSV Import slice creates durable local Staging Area tables:
 
 - `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
-- `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, and pending/accounted status.
+- `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, pending/accounted status, and the approved Ledgerly entry id/file when accounted.
 
 Each imported Statement Row gets an Import Fingerprint derived from normalized row identity within the Source Account. Re-importing the same CSV or an overlapping CSV skips rows where `(source_account, import_fingerprint)` already exists. Accounted Statement Rows remain in the Staging Area so future imports can still deduplicate against them.
 
@@ -56,7 +56,18 @@ Imported Statement Rows are not Beancount ledger entries. Approval remains the l
 
 Approval writes non-transfer Suggested Entries to `transactions/YYYY-MM.bean` based on the Statement Row posted date and ensures `main.bean` includes that Monthly Transaction File. Each approved entry includes the Source Account posting from the Statement Row and a balancing posting to the Founder-Operator selected Ledger Account.
 
-After Approval, the source Statement Row status changes from `pending` to `accounted` in the Staging Area. Approval is blocked while Ledger Validation reports Invalid Ledger State.
+After Approval, the source Statement Row status changes from `pending` to `accounted` in the Staging Area. Ledgerly also stores the approved `ledgerly_entry_id` and monthly ledger file path with the Statement Row so the Staging Area can link back to the readable Beancount entry.
+
+Ledgerly-written entries include minimal Beancount metadata:
+
+- `ledgerly_entry_id`
+- `import_fingerprint`
+- `source_account`
+- `source_file_name`
+
+Raw CSV row JSON, future AI explanations, and confidence scores stay in Ledgerly-managed local data rather than being copied into the ledger.
+
+Approval is blocked while Ledger Validation reports Invalid Ledger State. Broken Provenance is separate: if a Manual Ledger Edit removes or changes Ledgerly Entry Metadata while the Beancount files still validate, Ledgerly surfaces Broken Provenance without marking the ledger invalid.
 
 ## Validation Scope
 

@@ -72,8 +72,12 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
         let posted_date = required_value(&row, &mapping.posted_date_column)?;
         let description = required_value(&row, &mapping.description_column)?;
         let source_amount = required_amount(&row, &mapping.amount_column)?;
-        let import_fingerprint =
-            import_fingerprint(&input.source_account, &posted_date, &description, &source_amount);
+        let import_fingerprint = import_fingerprint(
+            &input.source_account,
+            &posted_date,
+            &description,
+            &source_amount,
+        );
         if statement_row_exists(&connection, &input.source_account, &import_fingerprint)? {
             skipped_duplicate_count += 1;
             continue;
@@ -129,8 +133,8 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
 
 fn ensure_app_created_workspace(root: &Path) -> Result<WorkspaceManifest, WorkspaceError> {
     let manifest_path = root.join(".ledgerly").join("workspace.json");
-    let manifest: WorkspaceManifest =
-        serde_json::from_str(&fs::read_to_string(manifest_path)?).map_err(|_| {
+    let manifest: WorkspaceManifest = serde_json::from_str(&fs::read_to_string(manifest_path)?)
+        .map_err(|_| {
             WorkspaceError::new(
                 WorkspaceErrorCode::NotAppCreatedWorkspace,
                 "Workspace manifest is unreadable.",
@@ -160,7 +164,7 @@ fn ensure_source_account_exists(root: &Path, source_account: &str) -> Result<(),
     ))
 }
 
-fn ensure_import_tables(connection: &Connection) -> Result<(), WorkspaceError> {
+pub(crate) fn ensure_import_tables(connection: &Connection) -> Result<(), WorkspaceError> {
     connection.execute_batch(
         "
         create table if not exists source_mappings (
@@ -181,6 +185,8 @@ fn ensure_import_tables(connection: &Connection) -> Result<(), WorkspaceError> {
           raw_row_json text not null,
           status text not null,
           imported_at text not null,
+          ledgerly_entry_id text,
+          ledger_entry_file text,
           unique(source_account, import_fingerprint)
         );
         ",
@@ -252,7 +258,10 @@ fn parse_csv(contents: &str) -> Result<Vec<HashMap<String, String>>, WorkspaceEr
         let values = parse_csv_line(line);
         let mut row = HashMap::new();
         for (index, header) in headers.iter().enumerate() {
-            row.insert(header.clone(), values.get(index).cloned().unwrap_or_default());
+            row.insert(
+                header.clone(),
+                values.get(index).cloned().unwrap_or_default(),
+            );
         }
         rows.push(row);
     }
@@ -462,7 +471,9 @@ mod tests {
             workspace_root_path: created.root_path.clone(),
             source_account: "Assets:Bank:Operating-Checking".to_string(),
             source_file_name: "checking-overlap.csv".to_string(),
-            csv_contents: "Date,Description,Amount\n2026-01-04,Software,-29.99\n2026-01-05,Refund,12.00\n".to_string(),
+            csv_contents:
+                "Date,Description,Amount\n2026-01-04,Software,-29.99\n2026-01-05,Refund,12.00\n"
+                    .to_string(),
             mapping: None,
         })
         .unwrap();

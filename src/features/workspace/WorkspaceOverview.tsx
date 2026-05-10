@@ -1,5 +1,6 @@
 import type {
   CsvSourceMappingInput,
+  BrokenProvenance,
   SuggestedEntry,
   WorkspaceSummary,
 } from "../../lib/workspace/types";
@@ -11,6 +12,7 @@ import { SuggestedEntryReview } from "./SuggestedEntryReview";
 type WorkspaceOverviewProps = {
   workspace: WorkspaceSummary;
   suggestedEntries?: SuggestedEntry[];
+  brokenProvenance?: BrokenProvenance[];
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
@@ -43,6 +45,7 @@ const workspaceFiles = [
 export function WorkspaceOverview({
   workspace,
   suggestedEntries = [],
+  brokenProvenance = [],
   onReveal,
   onOpenAnother,
   onValidate,
@@ -93,6 +96,30 @@ export function WorkspaceOverview({
               MVP Reports blocked
             </button>
           </div>
+        </section>
+      ) : null}
+
+      {brokenProvenance.length > 0 ? (
+        <section
+          className="provenance-alert"
+          role="status"
+          aria-labelledby="provenance-alert-title"
+        >
+          <div>
+            <p className="eyebrow">Broken Provenance</p>
+            <h2 id="provenance-alert-title">Ledgerly metadata needs attention</h2>
+            <p>
+              Ledger validation still passes, but Ledgerly cannot match some
+              Accounted Statement Rows back to their approved ledger entries.
+            </p>
+          </div>
+          <ul>
+            {brokenProvenance.map((item) => (
+              <li key={item.statementRowId}>
+                {item.statementRowId}: {item.reason}
+              </li>
+            ))}
+          </ul>
         </section>
       ) : null}
 
