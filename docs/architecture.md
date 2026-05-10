@@ -150,7 +150,7 @@ sequenceDiagram
   Core-->>Cmd: CsvImportResult
   Cmd-->>API: CsvImportResult
   API-->>UI: CsvImportResult
-  UI-->>User: CSV import complete
+  UI-->>User: CSV import complete with imported and skipped counts
 
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
@@ -185,7 +185,7 @@ flowchart LR
     Metadata[workspace_metadata]
     OperationLog[operation_log]
     SourceMappings[source_mappings]
-    StatementRows[statement_rows]
+    StatementRows[statement_rows with import_fingerprint]
     StagingPlaceholder[staging_area_placeholder]
     MappingPlaceholder[source_mappings_placeholder]
     RulesPlaceholder[categorization_rules_placeholder]
@@ -228,6 +228,7 @@ sequenceDiagram
 - The Workspace overview renders Invalid Ledger State details from `WorkspaceSummary.ledgerValidation` and blocks unsafe Approval and MVP Report affordances while validation is invalid.
 - The Source Account setup UI collects bank or credit-card Source Accounts and optional Opening Balances, then refreshes the Workspace summary returned from the native write.
 - The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
+- CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.
@@ -242,5 +243,6 @@ sequenceDiagram
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
 - Source Account setup appends valid Beancount directives to the readable ledger files rather than storing canonical account setup only in SQLite.
 - CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
+- Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

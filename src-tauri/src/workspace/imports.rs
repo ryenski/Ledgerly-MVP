@@ -36,6 +36,7 @@ pub struct CsvSourceMappingInput {
 pub struct CsvImportResult {
     pub source_account: String,
     pub imported_count: usize,
+    pub skipped_duplicate_count: usize,
 }
 
 pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, WorkspaceError> {
@@ -48,6 +49,7 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
         return Ok(CsvImportResult {
             source_account: input.source_account,
             imported_count: 0,
+            skipped_duplicate_count: 0,
         });
     }
 
@@ -63,12 +65,19 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
     };
 
     let mut imported_count = 0;
+    let mut skipped_duplicate_count = 0;
     let now = Utc::now().to_rfc3339();
 
     for row in rows {
         let posted_date = required_value(&row, &mapping.posted_date_column)?;
         let description = required_value(&row, &mapping.description_column)?;
         let source_amount = required_amount(&row, &mapping.amount_column)?;
+        let import_fingerprint =
+            import_fingerprint(&input.source_account, &posted_date, &description, &source_amount);
+        if statement_row_exists(&connection, &input.source_account, &import_fingerprint)? {
+            skipped_duplicate_count += 1;
+            continue;
+        }
         let raw_row_json =
             serde_json::to_string(&row).map_err(|error| WorkspaceError::io(error.to_string()))?;
         let supporting_fields_json = serde_json::to_string(&json!({
@@ -88,11 +97,12 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
               posted_date,
               description,
               source_amount,
+              import_fingerprint,
               supporting_fields_json,
               raw_row_json,
               status,
               imported_at
-            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending', ?9)
+            ) values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'pending', ?10)
             ",
             params![
                 Uuid::new_v4().to_string(),
@@ -101,6 +111,7 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
                 posted_date,
                 description,
                 source_amount,
+                import_fingerprint,
                 supporting_fields_json,
                 raw_row_json,
                 now
@@ -112,6 +123,7 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
     Ok(CsvImportResult {
         source_account: input.source_account,
         imported_count,
+        skipped_duplicate_count,
     })
 }
 
@@ -164,14 +176,29 @@ fn ensure_import_tables(connection: &Connection) -> Result<(), WorkspaceError> {
           posted_date text not null,
           description text not null,
           source_amount text not null,
+          import_fingerprint text not null,
           supporting_fields_json text not null,
           raw_row_json text not null,
           status text not null,
-          imported_at text not null
+          imported_at text not null,
+          unique(source_account, import_fingerprint)
         );
         ",
     )?;
     Ok(())
+}
+
+fn statement_row_exists(
+    connection: &Connection,
+    source_account: &str,
+    import_fingerprint: &str,
+) -> Result<bool, WorkspaceError> {
+    let count: i64 = connection.query_row(
+        "select count(*) from statement_rows where source_account = ?1 and import_fingerprint = ?2",
+        params![source_account, import_fingerprint],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
 }
 
 fn save_source_mapping(
@@ -266,6 +293,25 @@ fn optional_value(row: &HashMap<String, String>, column: Option<&str>) -> Option
     column.and_then(|column| row.get(column).map(|value| value.trim().to_string()))
 }
 
+fn import_fingerprint(
+    source_account: &str,
+    posted_date: &str,
+    description: &str,
+    source_amount: &str,
+) -> String {
+    let input = format!("{source_account}\n{posted_date}\n{description}\n{source_amount}");
+    format!("{:016x}", fnv1a64(input.as_bytes()))
+}
+
+fn fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
 #[cfg(test)]
 mod tests {
     use crate::workspace::create::create_workspace;
@@ -350,5 +396,77 @@ mod tests {
         .unwrap();
 
         assert_eq!(reused.imported_count, 1);
+    }
+
+    #[test]
+    fn skips_duplicate_statement_rows_for_same_source_account() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+
+        let input = CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-03,Client payment,1500.00\n2026-01-04,Software,-29.99\n".to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        };
+
+        let first = import_statement_rows(input.clone()).unwrap();
+        assert_eq!(first.imported_count, 2);
+        assert_eq!(first.skipped_duplicate_count, 0);
+
+        let second = import_statement_rows(CsvImportInput {
+            source_file_name: "checking-again.csv".to_string(),
+            mapping: None,
+            ..input
+        })
+        .unwrap();
+        assert_eq!(second.imported_count, 0);
+        assert_eq!(second.skipped_duplicate_count, 2);
+
+        let connection = Connection::open(
+            std::path::Path::new(&created.root_path)
+                .join(".ledgerly")
+                .join("ledgerly.sqlite"),
+        )
+        .unwrap();
+        connection
+            .execute(
+                "update statement_rows set status = 'accounted' where description = 'Software'",
+                [],
+            )
+            .unwrap();
+
+        let third = import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking-overlap.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-04,Software,-29.99\n2026-01-05,Refund,12.00\n".to_string(),
+            mapping: None,
+        })
+        .unwrap();
+        assert_eq!(third.imported_count, 1);
+        assert_eq!(third.skipped_duplicate_count, 1);
     }
 }
