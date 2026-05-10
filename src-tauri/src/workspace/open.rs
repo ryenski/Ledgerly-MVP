@@ -61,6 +61,7 @@ pub fn open_workspace(path: impl AsRef<Path>) -> Result<WorkspaceSummary, Worksp
         } else {
             LedgerStatus::Invalid
         },
+        ledger_validation: validation,
     })
 }
 
@@ -85,6 +86,34 @@ mod tests {
         assert_eq!(opened.business_name, "Acme Studio");
         assert_eq!(opened.base_currency, "USD");
         assert_eq!(opened.books_start_date, "2026-01-01");
+        assert_eq!(opened.ledger_validation.status, LedgerStatus::Valid);
+        assert!(opened.ledger_validation.errors.is_empty());
+    }
+
+    #[test]
+    fn opens_app_created_workspace_with_invalid_ledger_state() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        fs::write(
+            Path::new(&created.root_path).join("accounts.bean"),
+            "2026-01-01 open Assets:Bank:Checking EUR\n",
+        )
+        .unwrap();
+
+        let opened = open_workspace(&created.root_path).unwrap();
+        assert_eq!(opened.ledger_status, LedgerStatus::Invalid);
+        assert_eq!(opened.ledger_validation.status, LedgerStatus::Invalid);
+        assert!(opened
+            .ledger_validation
+            .errors
+            .iter()
+            .any(|error| error.contains("accounts.bean:1")));
     }
 
     #[test]

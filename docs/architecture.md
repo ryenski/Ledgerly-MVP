@@ -1,6 +1,6 @@
 # Ledgerly Architecture
 
-This document describes the current codebase architecture after the first App-Created Workspace lifecycle slice and the local agent workflow skill used to work ready GitHub issues.
+This document describes the current codebase architecture after the first App-Created Workspace lifecycle slice, the first Ledger Validation slice, and the local agent workflow skill used to work ready GitHub issues.
 
 ## Current System
 
@@ -15,6 +15,7 @@ flowchart TB
       WorkspaceScreens[src/features/workspace/*]
       WorkspaceApi[src/lib/workspace/api.ts]
       WorkspaceTypes[src/lib/workspace/types.ts]
+      InvalidLedgerUI[Invalid Ledger State UI]
     end
 
     subgraph TauriRuntime[Tauri Runtime]
@@ -55,6 +56,7 @@ flowchart TB
   App --> Shell
   App --> WorkspaceScreens
   WorkspaceScreens --> WorkspaceApi
+  WorkspaceScreens --> InvalidLedgerUI
   WorkspaceApi --> Commands
   Commands --> Create
   Commands --> Open
@@ -72,6 +74,7 @@ flowchart TB
   Validation --> MainBean
   Validation --> AccountsBean
   Validation --> OpeningBalances
+  InvalidLedgerUI --> WorkspaceApi
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -94,10 +97,21 @@ sequenceDiagram
   Core->>Disk: write Beancount files
   Core->>Disk: write .ledgerly/workspace.json
   Core->>Disk: initialize .ledgerly/ledgerly.sqlite
+  Core->>Core: validation::validate_workspace(path)
   Core-->>Cmd: WorkspaceSummary
   Cmd-->>API: WorkspaceSummary
   API-->>UI: WorkspaceSummary
   UI-->>User: Workspace overview
+
+  User->>Disk: External Ledger Edit
+  User->>UI: Return to app or Recheck Ledger
+  UI->>API: validateWorkspace(path)
+  API->>Cmd: invoke("validate_workspace")
+  Cmd->>Core: validation::validate_workspace(path)
+  Core-->>Cmd: LedgerValidationSummary
+  Cmd-->>API: LedgerValidationSummary
+  API-->>UI: LedgerValidationSummary
+  UI-->>User: Invalid Ledger State details and blocked unsafe actions
 
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
@@ -169,9 +183,10 @@ sequenceDiagram
 ## Boundaries
 
 - React owns presentation state, forms, error rendering, and Workspace overview screens.
+- The Workspace overview renders Invalid Ledger State details from `WorkspaceSummary.ledgerValidation` and blocks unsafe Approval and MVP Report affordances while validation is invalid.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
-- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, and structural ledger validation.
+- `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, and structural ledger validation with file-aware error messages.
 - The Workspace folder owns all accounting data needed for this slice. No Ledgerly cloud account is required.
 - `.agents/skills/work-ready-issues/` owns the local AFK workflow for sequentially selecting, implementing, reviewing, merging, and continuing through GitHub issues labeled `ready-for-agent`.
 
@@ -179,7 +194,7 @@ sequenceDiagram
 
 - Only App-Created Workspaces are supported.
 - `USD` is the only supported MVP currency.
-- Validation is structural and local; full Beancount parser validation is deferred.
+- Validation is structural and local. It runs after Ledgerly creates a Workspace, when opening a Workspace, and when the UI rechecks the ledger after External Ledger Edits.
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

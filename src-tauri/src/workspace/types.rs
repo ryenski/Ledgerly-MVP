@@ -64,6 +64,7 @@ pub struct WorkspaceSummary {
     pub base_currency: String,
     pub books_start_date: String,
     pub ledger_status: LedgerStatus,
+    pub ledger_validation: LedgerValidationSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]

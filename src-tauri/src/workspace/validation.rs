@@ -13,22 +13,22 @@ pub fn validate_workspace(path: impl AsRef<Path>) -> Result<LedgerValidationSumm
     let opening_balances_path = root.join("opening-balances.bean");
 
     if !main_path.exists() {
-        errors.push("Missing main.bean.".to_string());
+        errors.push("main.bean: Missing file.".to_string());
     }
     if !accounts_path.exists() {
-        errors.push("Missing accounts.bean.".to_string());
+        errors.push("accounts.bean: Missing file.".to_string());
     }
     if !opening_balances_path.exists() {
-        errors.push("Missing opening-balances.bean.".to_string());
+        errors.push("opening-balances.bean: Missing file.".to_string());
     }
 
     if errors.is_empty() {
         let main = fs::read_to_string(&main_path)?;
         if !main.contains("include \"accounts.bean\"") {
-            errors.push("main.bean must include accounts.bean.".to_string());
+            errors.push("main.bean: must include accounts.bean.".to_string());
         }
         if !main.contains("include \"opening-balances.bean\"") {
-            errors.push("main.bean must include opening-balances.bean.".to_string());
+            errors.push("main.bean: must include opening-balances.bean.".to_string());
         }
 
         let accounts = fs::read_to_string(&accounts_path)?;
@@ -40,17 +40,66 @@ pub fn validate_workspace(path: impl AsRef<Path>) -> Result<LedgerValidationSumm
 
             let parts = trimmed.split_whitespace().collect::<Vec<_>>();
             if parts.len() != 4 || parts[1] != "open" {
-                errors.push(format!("Invalid account open directive on line {}.", line_number + 1));
+                errors.push(format!(
+                    "accounts.bean:{} Invalid account open directive.",
+                    line_number + 1
+                ));
                 continue;
             }
             if validate_books_start_date(parts[0]).is_err() {
-                errors.push(format!("Invalid date on line {}.", line_number + 1));
+                errors.push(format!("accounts.bean:{} Invalid date.", line_number + 1));
             }
             if !is_valid_account_name(parts[2]) {
-                errors.push(format!("Invalid account name on line {}.", line_number + 1));
+                errors.push(format!("accounts.bean:{} Invalid account name.", line_number + 1));
             }
             if parts[3] != "USD" {
-                errors.push(format!("Invalid currency on line {}.", line_number + 1));
+                errors.push(format!(
+                    "accounts.bean:{} Invalid currency {}.",
+                    line_number + 1,
+                    parts[3]
+                ));
+            }
+        }
+
+        let opening_balances = fs::read_to_string(&opening_balances_path)?;
+        for (line_number, line) in opening_balances.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with(';') {
+                continue;
+            }
+
+            let parts = trimmed.split_whitespace().collect::<Vec<_>>();
+            if parts.len() != 5 || parts[1] != "balance" {
+                errors.push(format!(
+                    "opening-balances.bean:{} Invalid opening balance directive.",
+                    line_number + 1
+                ));
+                continue;
+            }
+            if validate_books_start_date(parts[0]).is_err() {
+                errors.push(format!(
+                    "opening-balances.bean:{} Invalid date.",
+                    line_number + 1
+                ));
+            }
+            if !is_valid_account_name(parts[2]) {
+                errors.push(format!(
+                    "opening-balances.bean:{} Invalid account name.",
+                    line_number + 1
+                ));
+            }
+            if parts[3].parse::<f64>().is_err() {
+                errors.push(format!(
+                    "opening-balances.bean:{} Invalid balance amount.",
+                    line_number + 1
+                ));
+            }
+            if parts[4] != "USD" {
+                errors.push(format!(
+                    "opening-balances.bean:{} Invalid currency {}.",
+                    line_number + 1,
+                    parts[4]
+                ));
             }
         }
     }
@@ -149,5 +198,29 @@ mod tests {
 
         let validation = validate_workspace(summary.root_path).unwrap();
         assert_eq!(validation.status, LedgerStatus::Invalid);
+    }
+
+    #[test]
+    fn corrupted_opening_balances_file_is_invalid() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let summary = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        fs::write(
+            Path::new(&summary.root_path).join("opening-balances.bean"),
+            "this is not a valid opening balance directive\n",
+        )
+        .unwrap();
+
+        let validation = validate_workspace(summary.root_path).unwrap();
+        assert_eq!(validation.status, LedgerStatus::Invalid);
+        assert!(validation
+            .errors
+            .iter()
+            .any(|error| error.contains("opening-balances.bean:1")));
     }
 }
