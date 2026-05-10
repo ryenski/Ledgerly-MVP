@@ -1,6 +1,6 @@
 ---
 name: work-off-github-issues
-description: Work through GitHub issues labeled ready-for-agent one at a time, from branch creation through implementation, issue-posted code review, review fixes, PR merge, and the next issue. Use when the user asks to work off ready-for-agent issues, process an issue queue, start from a specific issue number, or keep implementing GitHub issues sequentially.
+description: Work through GitHub issues labeled ready-for-agent one at a time, from branch creation through implementation, PR-posted code review, review fixes, PR merge, and the next issue. Use when the user asks to work off ready-for-agent issues, process an issue queue, start from a specific issue number, or keep implementing GitHub issues sequentially.
 ---
 
 # Work Off GitHub Issues
@@ -12,7 +12,7 @@ Implement `ready-for-agent` GitHub issues sequentially in full AFK mode. Finish 
 1. Confirm the repository from `git remote -v`.
 2. List open issues with `ready-for-agent`, ordered by issue number.
 3. Start with the issue number requested by the user, or the lowest-numbered eligible issue.
-4. For each issue: branch, implement, test, open PR, review, post review to the issue, fix review findings, merge, then continue.
+4. For each issue: branch, implement, test, open PR, review, post review to the PR, fix review findings, merge, then continue.
 
 ## Queue Rules
 
@@ -70,7 +70,7 @@ Implement `ready-for-agent` GitHub issues sequentially in full AFK mode. Finish 
 
 - Review the diff as if reviewing another engineer's PR.
 - Prioritize correctness, regressions, missing tests, maintainability, and architecture/documentation drift.
-- Post the review to the GitHub issue, not only in chat. Start with a short heading such as:
+- Post the review to the PR, not the issue and not only in chat. Start with a short heading such as:
   `## Code Review for PR #<pr-number>`
 - If there are no findings, say so and note residual risks or test gaps.
 
@@ -79,7 +79,7 @@ Implement `ready-for-agent` GitHub issues sequentially in full AFK mode. Finish 
 - Fix every actionable review finding before merging.
 - Re-run relevant checks.
 - Repeat review and fixes until there are no unresolved actionable findings.
-- Post each follow-up review or resolution summary to the issue.
+- Post each follow-up review or resolution summary to the PR.
 
 ### 8. Merge And Continue
 
