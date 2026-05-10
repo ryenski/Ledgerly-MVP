@@ -46,7 +46,9 @@ SQLite does not replace the ledger. It exists so later slices can add staging, s
 The CSV Import slice creates durable local Staging Area tables:
 
 - `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
-- `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, optional supporting fields, raw row JSON, source file name, and pending/accounted status.
+- `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, and pending/accounted status.
+
+Each imported Statement Row gets an Import Fingerprint derived from normalized row identity within the Source Account. Re-importing the same CSV or an overlapping CSV skips rows where `(source_account, import_fingerprint)` already exists. Accounted Statement Rows remain in the Staging Area so future imports can still deduplicate against them.
 
 Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
 

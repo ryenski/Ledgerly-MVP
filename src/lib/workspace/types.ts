@@ -35,6 +35,7 @@ export type CsvImportInput = {
 export type CsvImportResult = {
   sourceAccount: string;
   importedCount: number;
+  skippedDuplicateCount: number;
 };
 
 export type WorkspaceManifest = {
