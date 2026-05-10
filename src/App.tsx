@@ -4,16 +4,20 @@ import {
   addSourceAccount,
   approveTransferEntry,
   approveSuggestedEntry,
+  createCategorizationRule,
   createWorkspace,
   getBrokenProvenance,
   getSuggestedEntries,
   importStatementRows,
+  listCategorizationRules,
   openWorkspace,
   pickDirectory,
   revealWorkspace,
+  updateCategorizationRule,
   validateWorkspace,
 } from "./lib/workspace/api";
 import type {
+  CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
   SourceAccountKind,
@@ -25,6 +29,7 @@ import { CreateWorkspaceForm } from "./features/workspace/CreateWorkspaceForm";
 import { OpenWorkspaceForm } from "./features/workspace/OpenWorkspaceForm";
 import { WorkspaceOverview } from "./features/workspace/WorkspaceOverview";
 import { WorkspaceStart } from "./features/workspace/WorkspaceStart";
+import type { CategorizationRuleOffer } from "./features/workspace/CategorizationRulesPanel";
 
 type View = "start" | "create" | "open" | "overview";
 
@@ -40,6 +45,8 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
   const [suggestedEntries, setSuggestedEntries] = useState<SuggestedEntry[]>([]);
   const [brokenProvenance, setBrokenProvenance] = useState<BrokenProvenance[]>([]);
+  const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
+  const [ruleOffer, setRuleOffer] = useState<CategorizationRuleOffer | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(input: WorkspaceCreateInput) {
@@ -49,6 +56,8 @@ export default function App() {
       setWorkspace(created);
       setSuggestedEntries([]);
       setBrokenProvenance([]);
+      setCategorizationRules([]);
+      setRuleOffer(null);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -62,6 +71,8 @@ export default function App() {
       setWorkspace(opened);
       setSuggestedEntries(await getSuggestedEntries(opened.rootPath));
       setBrokenProvenance(await getBrokenProvenance(opened.rootPath));
+      setCategorizationRules(await listCategorizationRules(opened.rootPath));
+      setRuleOffer(null);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -109,6 +120,7 @@ export default function App() {
       setWorkspace(updated);
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
+      setCategorizationRules(await listCategorizationRules(updated.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -130,6 +142,7 @@ export default function App() {
       await handleValidateWorkspace();
       setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
       setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
+      setCategorizationRules(await listCategorizationRules(workspace.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -149,6 +162,17 @@ export default function App() {
       setWorkspace(updated);
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
+      setCategorizationRules(await listCategorizationRules(updated.rootPath));
+      const approvedEntry = suggestedEntries.find(
+        (entry) => entry.statementRowId === input.statementRowId,
+      );
+      if (approvedEntry) {
+        setRuleOffer({
+          sourceAccount: approvedEntry.sourceAccount,
+          matchText: approvedEntry.description,
+          ledgerAccount: input.ledgerAccount,
+        });
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -168,6 +192,41 @@ export default function App() {
       setWorkspace(updated);
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
+      setCategorizationRules(await listCategorizationRules(updated.rootPath));
+      setRuleOffer(null);
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
+  async function handleCreateCategorizationRule(input: CategorizationRuleOffer) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      await createCategorizationRule({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      setCategorizationRules(await listCategorizationRules(workspace.rootPath));
+      setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
+      setRuleOffer(null);
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
+  async function handleUpdateCategorizationRule(
+    input: CategorizationRuleOffer & { id: string },
+  ) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      await updateCategorizationRule({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      setCategorizationRules(await listCategorizationRules(workspace.rootPath));
+      setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -229,12 +288,17 @@ export default function App() {
           workspace={workspace}
           suggestedEntries={suggestedEntries}
           brokenProvenance={brokenProvenance}
+          categorizationRules={categorizationRules}
+          categorizationRuleOffer={ruleOffer}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}
           onImportStatementRows={handleImportStatementRows}
           onApproveSuggestedEntry={handleApproveSuggestedEntry}
           onApproveTransferEntry={handleApproveTransferEntry}
+          onCreateCategorizationRule={handleCreateCategorizationRule}
+          onUpdateCategorizationRule={handleUpdateCategorizationRule}
+          onDismissCategorizationRuleOffer={() => setRuleOffer(null)}
           onOpenAnother={() => {
             setError(null);
             setView("open");

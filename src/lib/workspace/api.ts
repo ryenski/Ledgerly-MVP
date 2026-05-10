@@ -6,10 +6,13 @@ import type {
   ApproveSuggestedEntryInput,
   ApproveTransferEntryInput,
   BrokenProvenance,
+  CategorizationRule,
+  CreateCategorizationRuleInput,
   CsvImportInput,
   CsvImportResult,
   LedgerValidationSummary,
   SuggestedEntry,
+  UpdateCategorizationRuleInput,
   WorkspaceCreateInput,
   WorkspaceSummary,
 } from "./types";
@@ -24,6 +27,13 @@ type WorkspaceApi = {
   getBrokenProvenance: (path: string) => Promise<BrokenProvenance[]>;
   approveSuggestedEntry: (input: ApproveSuggestedEntryInput) => Promise<WorkspaceSummary>;
   approveTransferEntry: (input: ApproveTransferEntryInput) => Promise<WorkspaceSummary>;
+  listCategorizationRules: (path: string) => Promise<CategorizationRule[]>;
+  createCategorizationRule: (
+    input: CreateCategorizationRuleInput,
+  ) => Promise<CategorizationRule>;
+  updateCategorizationRule: (
+    input: UpdateCategorizationRuleInput,
+  ) => Promise<CategorizationRule>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
 };
@@ -109,6 +119,33 @@ export async function approveTransferEntry(
     return window.__LEDGERLY_TEST_API__.approveTransferEntry(input);
   }
   return invoke<WorkspaceSummary>("approve_transfer_entry", { input });
+}
+
+export async function listCategorizationRules(
+  path: string,
+): Promise<CategorizationRule[]> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.listCategorizationRules(path);
+  }
+  return invoke<CategorizationRule[]>("list_categorization_rules", { path });
+}
+
+export async function createCategorizationRule(
+  input: CreateCategorizationRuleInput,
+): Promise<CategorizationRule> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.createCategorizationRule(input);
+  }
+  return invoke<CategorizationRule>("create_categorization_rule", { input });
+}
+
+export async function updateCategorizationRule(
+  input: UpdateCategorizationRuleInput,
+): Promise<CategorizationRule> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.updateCategorizationRule(input);
+  }
+  return invoke<CategorizationRule>("update_categorization_rule", { input });
 }
 
 export async function pickDirectory(): Promise<string | null> {

@@ -1,6 +1,9 @@
 use crate::workspace::approval::{
     self, ApproveSuggestedEntryInput, ApproveTransferEntryInput, BrokenProvenance, SuggestedEntry,
 };
+use crate::workspace::categorization_rules::{
+    self, CategorizationRule, CreateCategorizationRuleInput, UpdateCategorizationRuleInput,
+};
 use crate::workspace::create;
 use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
 use crate::workspace::open;
@@ -58,6 +61,25 @@ pub fn approve_transfer_entry(
     input: ApproveTransferEntryInput,
 ) -> Result<WorkspaceSummary, WorkspaceError> {
     approval::approve_transfer_entry(input)
+}
+
+#[tauri::command]
+pub fn list_categorization_rules(path: String) -> Result<Vec<CategorizationRule>, WorkspaceError> {
+    categorization_rules::list_categorization_rules(path)
+}
+
+#[tauri::command]
+pub fn create_categorization_rule(
+    input: CreateCategorizationRuleInput,
+) -> Result<CategorizationRule, WorkspaceError> {
+    categorization_rules::create_categorization_rule(input)
+}
+
+#[tauri::command]
+pub fn update_categorization_rule(
+    input: UpdateCategorizationRuleInput,
+) -> Result<CategorizationRule, WorkspaceError> {
+    categorization_rules::update_categorization_rule(input)
 }
 
 #[cfg(test)]

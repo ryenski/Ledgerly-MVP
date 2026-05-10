@@ -46,6 +46,29 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       async approveTransferEntry() {
         return workspace;
       },
+      async listCategorizationRules() {
+        return [];
+      },
+      async createCategorizationRule() {
+        return {
+          id: "rule-1",
+          sourceAccount: "Assets:Bank:Operating-Checking",
+          matchText: "Software",
+          ledgerAccount: "Expenses:Software",
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        };
+      },
+      async updateCategorizationRule() {
+        return {
+          id: "rule-1",
+          sourceAccount: "Assets:Bank:Operating-Checking",
+          matchText: "Software",
+          ledgerAccount: "Expenses:Software",
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        };
+      },
       async pickDirectory() {
         return "/tmp";
       },

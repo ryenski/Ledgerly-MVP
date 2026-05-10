@@ -54,6 +54,25 @@ describe("SuggestedEntryReview", () => {
     expect(screen.getByRole("button", { name: "Approval blocked" })).toBeDisabled();
   });
 
+  it("prefills deterministic rule suggestions", () => {
+    render(
+      <SuggestedEntryReview
+        suggestedEntries={[
+          {
+            ...suggestedEntries[0],
+            suggestedLedgerAccount: "Expenses:Software",
+            categorizationRuleId: "rule-1",
+          },
+        ]}
+        ledgerStatus="valid"
+        onApprove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Ledger Account")).toHaveValue("Expenses:Software");
+    expect(screen.getByText("Rule suggestion: Expenses:Software")).toBeInTheDocument();
+  });
+
   it("shows a matched transfer and approves both linked Statement Rows", async () => {
     const user = userEvent.setup();
     const onApproveTransfer = vi.fn().mockResolvedValue(undefined);

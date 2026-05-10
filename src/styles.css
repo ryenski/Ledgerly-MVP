@@ -316,7 +316,8 @@ dd {
 
 .source-account-setup,
 .csv-import-setup,
-.suggested-entry-review {
+.suggested-entry-review,
+.categorization-rules {
   margin-top: 28px;
 }
 
@@ -332,6 +333,39 @@ dd {
   border-radius: 8px;
   background: #ffffff;
   padding: 16px;
+}
+
+.rule-suggestion {
+  color: #1f6b4e;
+  font-weight: 700;
+}
+
+.rule-offer,
+.rule-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #dfddd5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.rule-offer dl,
+.rule-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rule-offer dl {
+  margin: 0;
+}
+
+.rule-card {
+  margin-top: 12px;
+}
+
+.empty-note {
+  color: #68706a;
 }
 
 .suggested-entry-card h3 {
