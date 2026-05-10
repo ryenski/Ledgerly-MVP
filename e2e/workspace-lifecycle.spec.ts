@@ -8,6 +8,10 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
       baseCurrency: "USD" as const,
       booksStartDate: "2026-01-01",
       ledgerStatus: "valid" as const,
+      ledgerValidation: {
+        status: "valid" as const,
+        errors: [],
+      },
     };
 
     window.__LEDGERLY_TEST_API__ = {

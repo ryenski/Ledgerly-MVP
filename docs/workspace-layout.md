@@ -38,13 +38,16 @@ SQLite does not replace the ledger. It exists so later slices can add staging, s
 
 ## Validation Scope
 
-Issue 1 uses structural validation:
+Ledgerly uses structural Ledger Validation for the current MVP slices:
 
 - required files exist
 - `main.bean` includes the expected files
 - account open directives have valid dates, account names, and `USD` currency
+- opening balance directives have valid dates, account names, numeric amounts, and `USD` currency
 
-Full Beancount parser validation is deferred until later ledger validation, approval, and reporting slices.
+Validation returns file-aware errors when available, for example `accounts.bean:1 Invalid currency EUR.` The app runs validation after creating a Workspace, when opening a Workspace, and when a Founder-Operator returns to the app or chooses **Recheck Ledger** after External Ledger Edits.
+
+Full balance validation grows with the Approval and reporting slices once Ledgerly writes Monthly Transaction Files.
 
 ## Folder Selection
 

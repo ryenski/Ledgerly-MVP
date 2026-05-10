@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import {
   createWorkspace,
   openWorkspace,
   pickDirectory,
   revealWorkspace,
+  validateWorkspace,
 } from "./lib/workspace/api";
 import type { WorkspaceCreateInput, WorkspaceSummary } from "./lib/workspace/types";
 import { CreateWorkspaceForm } from "./features/workspace/CreateWorkspaceForm";
@@ -58,6 +59,32 @@ export default function App() {
     }
   }
 
+  async function handleValidateWorkspace() {
+    if (!workspace) return;
+    setError(null);
+    try {
+      const ledgerValidation = await validateWorkspace(workspace.rootPath);
+      setWorkspace({
+        ...workspace,
+        ledgerStatus: ledgerValidation.status,
+        ledgerValidation,
+      });
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
+  useEffect(() => {
+    if (view !== "overview" || !workspace) return;
+
+    function revalidateOnFocus() {
+      void handleValidateWorkspace();
+    }
+
+    window.addEventListener("focus", revalidateOnFocus);
+    return () => window.removeEventListener("focus", revalidateOnFocus);
+  }, [view, workspace?.rootPath]);
+
   return (
     <AppShell>
       {view === "start" ? (
@@ -102,6 +129,7 @@ export default function App() {
         <WorkspaceOverview
           workspace={workspace}
           onReveal={handleReveal}
+          onValidate={handleValidateWorkspace}
           onOpenAnother={() => {
             setError(null);
             setView("open");

@@ -4,6 +4,7 @@ type WorkspaceOverviewProps = {
   workspace: WorkspaceSummary;
   onReveal: () => void;
   onOpenAnother: () => void;
+  onValidate?: () => void | Promise<void>;
   error?: string | null;
 };
 
@@ -19,6 +20,7 @@ export function WorkspaceOverview({
   workspace,
   onReveal,
   onOpenAnother,
+  onValidate,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -37,6 +39,33 @@ export function WorkspaceOverview({
         <div className="error-banner" role="alert">
           {error}
         </div>
+      ) : null}
+
+      {workspace.ledgerStatus === "invalid" ? (
+        <section className="ledger-alert" role="alert" aria-labelledby="ledger-alert-title">
+          <div>
+            <p className="eyebrow">Invalid Ledger State</p>
+            <h2 id="ledger-alert-title">Ledger Validation needs attention</h2>
+            <p>
+              Ledgerly found validation errors in the Workspace ledger. You can
+              inspect these files and edit them externally, but unsafe accounting
+              actions stay blocked until validation passes.
+            </p>
+          </div>
+          <ul>
+            {workspace.ledgerValidation.errors.map((validationError) => (
+              <li key={validationError}>{validationError}</li>
+            ))}
+          </ul>
+          <div className="blocked-actions" aria-label="Blocked unsafe actions">
+            <button className="secondary-button" type="button" disabled>
+              Approval blocked
+            </button>
+            <button className="secondary-button" type="button" disabled>
+              MVP Reports blocked
+            </button>
+          </div>
+        </section>
       ) : null}
 
       <dl className="detail-grid">
@@ -67,6 +96,11 @@ export function WorkspaceOverview({
         <button className="primary-button" type="button" onClick={onReveal}>
           Reveal Workspace
         </button>
+        {onValidate ? (
+          <button className="secondary-button" type="button" onClick={onValidate}>
+            Recheck Ledger
+          </button>
+        ) : null}
         <button className="secondary-button" type="button" onClick={onOpenAnother}>
           Open Another Workspace
         </button>

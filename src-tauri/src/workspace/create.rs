@@ -10,6 +10,7 @@ use crate::workspace::types::{
     CreateWorkspaceInput, LedgerStatus, WorkspaceBusiness, WorkspaceLayout, WorkspaceManifest,
     WorkspaceSummary,
 };
+use crate::workspace::validation::validate_workspace;
 use chrono::Utc;
 use rusqlite::{params, Connection};
 use std::fs;
@@ -32,13 +33,19 @@ pub fn create_workspace(input: CreateWorkspaceInput) -> Result<WorkspaceSummary,
 
     fs::create_dir_all(&root_path)?;
     create_workspace_contents(&root_path, &business_name, &base_currency, &books_start_date)?;
+    let ledger_validation = validate_workspace(&root_path)?;
 
     Ok(WorkspaceSummary {
         root_path: root_path.to_string_lossy().to_string(),
         business_name,
         base_currency,
         books_start_date,
-        ledger_status: LedgerStatus::Valid,
+        ledger_status: if ledger_validation.status == LedgerStatus::Valid {
+            LedgerStatus::Valid
+        } else {
+            LedgerStatus::Invalid
+        },
+        ledger_validation,
     })
 }
 

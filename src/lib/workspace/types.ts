@@ -35,6 +35,7 @@ export type WorkspaceSummary = {
   baseCurrency: "USD";
   booksStartDate: string;
   ledgerStatus: LedgerStatus;
+  ledgerValidation: LedgerValidationSummary;
 };
 
 export type LedgerValidationSummary = {

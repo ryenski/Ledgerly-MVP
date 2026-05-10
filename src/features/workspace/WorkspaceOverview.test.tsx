@@ -10,6 +10,10 @@ const workspace: WorkspaceSummary = {
   baseCurrency: "USD",
   booksStartDate: "2026-01-01",
   ledgerStatus: "valid",
+  ledgerValidation: {
+    status: "valid",
+    errors: [],
+  },
 };
 
 describe("WorkspaceOverview", () => {
@@ -53,6 +57,24 @@ describe("WorkspaceOverview", () => {
     expect(onOpenAnother).toHaveBeenCalledOnce();
   });
 
+  it("runs ledger validation when requested", async () => {
+    const user = userEvent.setup();
+    const onValidate = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <WorkspaceOverview
+        workspace={workspace}
+        onReveal={vi.fn()}
+        onOpenAnother={vi.fn()}
+        onValidate={onValidate}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Recheck Ledger" }));
+
+    expect(onValidate).toHaveBeenCalledOnce();
+  });
+
   it("renders errors", () => {
     render(
       <WorkspaceOverview
@@ -64,5 +86,27 @@ describe("WorkspaceOverview", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent("Could not reveal Workspace.");
+  });
+
+  it("shows Invalid Ledger State details and blocks unsafe future actions", () => {
+    render(
+      <WorkspaceOverview
+        workspace={{
+          ...workspace,
+          ledgerStatus: "invalid",
+          ledgerValidation: {
+            status: "invalid",
+            errors: ["accounts.bean:1 Invalid currency EUR."],
+          },
+        }}
+        onReveal={vi.fn()}
+        onOpenAnother={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Invalid Ledger State");
+    expect(screen.getByText("accounts.bean:1 Invalid currency EUR.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approval blocked" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "MVP Reports blocked" })).toBeDisabled();
   });
 });
