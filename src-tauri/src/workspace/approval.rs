@@ -1,3 +1,4 @@
+use crate::workspace::categorization_rules::matching_rule_for_row;
 use crate::workspace::errors::{WorkspaceError, WorkspaceErrorCode};
 use crate::workspace::imports::ensure_import_tables;
 use crate::workspace::open::open_workspace;
@@ -41,6 +42,8 @@ pub struct SuggestedEntry {
     pub source_file_name: String,
     pub import_fingerprint: String,
     pub linked_statement_row: Option<LinkedStatementRow>,
+    pub suggested_ledger_account: Option<String>,
+    pub categorization_rule_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -79,7 +82,7 @@ pub fn get_suggested_entries(
     ensure_import_tables(&connection)?;
     ensure_provenance_columns(&connection)?;
     let pending_rows = load_pending_statement_rows(&connection)?;
-    Ok(build_suggested_entries(pending_rows)?)
+    build_suggested_entries(&connection, pending_rows)
 }
 
 pub fn get_broken_provenance(
@@ -256,6 +259,8 @@ fn load_pending_statement_rows(
                 source_file_name: row.get(5)?,
                 import_fingerprint: row.get(6)?,
                 linked_statement_row: None,
+                suggested_ledger_account: None,
+                categorization_rule_id: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -263,6 +268,7 @@ fn load_pending_statement_rows(
 }
 
 fn build_suggested_entries(
+    connection: &Connection,
     rows: Vec<SuggestedEntry>,
 ) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
     let mut suggestions = Vec::new();
@@ -287,7 +293,7 @@ fn build_suggested_entries(
             let mut transfer = row.clone();
             transfer.kind = SuggestedEntryKind::Transfer;
             transfer.linked_statement_row = Some(linked_statement_row(linked));
-            suggestions.push(transfer);
+            suggestions.push(apply_categorization_rule(connection, transfer)?);
             continue;
         }
 
@@ -295,17 +301,32 @@ fn build_suggested_entries(
             let mut transfer = row.clone();
             transfer.kind = SuggestedEntryKind::Transfer;
             consumed[index] = true;
-            suggestions.push(transfer);
+            suggestions.push(apply_categorization_rule(connection, transfer)?);
             continue;
         }
     }
 
     for (index, row) in rows.into_iter().enumerate() {
         if !consumed[index] {
-            suggestions.push(row);
+            suggestions.push(apply_categorization_rule(connection, row)?);
         }
     }
     Ok(suggestions)
+}
+
+fn apply_categorization_rule(
+    connection: &Connection,
+    mut entry: SuggestedEntry,
+) -> Result<SuggestedEntry, WorkspaceError> {
+    if entry.kind == SuggestedEntryKind::Standard {
+        if let Some(rule) =
+            matching_rule_for_row(connection, &entry.source_account, &entry.description)?
+        {
+            entry.suggested_ledger_account = Some(rule.ledger_account);
+            entry.categorization_rule_id = Some(rule.id);
+        }
+    }
+    Ok(entry)
 }
 
 fn linked_statement_row(row: SuggestedEntry) -> LinkedStatementRow {
@@ -343,6 +364,8 @@ fn load_pending_suggested_entry(
                     source_file_name: row.get(5)?,
                     import_fingerprint: row.get(6)?,
                     linked_statement_row: None,
+                    suggested_ledger_account: None,
+                    categorization_rule_id: None,
                 })
             },
         )
@@ -593,6 +616,9 @@ mod tests {
         get_suggested_entries, ApproveSuggestedEntryInput, ApproveTransferEntryInput,
         SuggestedEntryKind,
     };
+    use crate::workspace::categorization_rules::{
+        create_categorization_rule, CreateCategorizationRuleInput,
+    };
     use crate::workspace::create::create_workspace;
     use crate::workspace::imports::{import_statement_rows, CsvImportInput, CsvSourceMappingInput};
     use crate::workspace::source_accounts::{
@@ -835,6 +861,60 @@ mod tests {
         assert_eq!(suggested_entries.len(), 1);
         assert_eq!(suggested_entries[0].kind, SuggestedEntryKind::Transfer);
         assert!(suggested_entries[0].linked_statement_row.is_none());
+    }
+
+    #[test]
+    fn applies_confirmed_categorization_rules_to_future_suggested_entries() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        let rule = create_categorization_rule(CreateCategorizationRuleInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            match_text: "Software".to_string(),
+            ledger_account: "Expenses:Software".to_string(),
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-04,Software renewal,-29.99\n"
+                .to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+
+        let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
+        assert_eq!(suggested_entries.len(), 1);
+        assert_eq!(
+            suggested_entries[0].suggested_ledger_account.as_deref(),
+            Some("Expenses:Software")
+        );
+        assert_eq!(
+            suggested_entries[0].categorization_rule_id.as_deref(),
+            Some(rule.id.as_str())
+        );
     }
 
     #[test]

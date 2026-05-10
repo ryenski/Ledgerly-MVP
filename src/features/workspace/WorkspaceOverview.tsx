@@ -1,9 +1,14 @@
 import type {
+  CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
   SuggestedEntry,
   WorkspaceSummary,
 } from "../../lib/workspace/types";
+import {
+  CategorizationRulesPanel,
+  type CategorizationRuleOffer,
+} from "./CategorizationRulesPanel";
 import { CsvImportSetup } from "./CsvImportSetup";
 import { SourceAccountSetup } from "./SourceAccountSetup";
 import type { SourceAccountKind } from "../../lib/workspace/types";
@@ -13,6 +18,8 @@ type WorkspaceOverviewProps = {
   workspace: WorkspaceSummary;
   suggestedEntries?: SuggestedEntry[];
   brokenProvenance?: BrokenProvenance[];
+  categorizationRules?: CategorizationRule[];
+  categorizationRuleOffer?: CategorizationRuleOffer | null;
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
@@ -35,6 +42,11 @@ type WorkspaceOverviewProps = {
     statementRowId: string;
     linkedStatementRowId: string;
   }) => Promise<void> | void;
+  onCreateCategorizationRule?: (input: CategorizationRuleOffer) => Promise<void> | void;
+  onUpdateCategorizationRule?: (
+    input: CategorizationRuleOffer & { id: string },
+  ) => Promise<void> | void;
+  onDismissCategorizationRuleOffer?: () => void;
   error?: string | null;
 };
 
@@ -50,6 +62,8 @@ export function WorkspaceOverview({
   workspace,
   suggestedEntries = [],
   brokenProvenance = [],
+  categorizationRules = [],
+  categorizationRuleOffer = null,
   onReveal,
   onOpenAnother,
   onValidate,
@@ -57,6 +71,9 @@ export function WorkspaceOverview({
   onImportStatementRows,
   onApproveSuggestedEntry,
   onApproveTransferEntry,
+  onCreateCategorizationRule,
+  onUpdateCategorizationRule,
+  onDismissCategorizationRuleOffer,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -168,6 +185,14 @@ export function WorkspaceOverview({
           onApproveTransfer={onApproveTransferEntry}
         />
       ) : null}
+
+      <CategorizationRulesPanel
+        rules={categorizationRules}
+        offer={categorizationRuleOffer}
+        onCreateRule={onCreateCategorizationRule}
+        onUpdateRule={onUpdateCategorizationRule}
+        onDismissOffer={onDismissCategorizationRuleOffer}
+      />
 
       <div className="action-row">
         <button className="primary-button" type="button" onClick={onReveal}>

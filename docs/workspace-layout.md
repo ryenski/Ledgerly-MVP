@@ -47,10 +47,13 @@ The CSV Import slice creates durable local Staging Area tables:
 
 - `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
 - `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, pending/accounted status, and the approved Ledgerly entry id/file when accounted.
+- `categorization_rules` stores Founder-Operator confirmed description match text, Source Account scope, and target Ledger Account for deterministic future Suggested Entries.
 
 Each imported Statement Row gets an Import Fingerprint derived from normalized row identity within the Source Account. Re-importing the same CSV or an overlapping CSV skips rows where `(source_account, import_fingerprint)` already exists. Accounted Statement Rows remain in the Staging Area so future imports can still deduplicate against them.
 
 Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
+
+Confirmed Categorization Rules do not write to Beancount directly. They prefill future Standard Suggested Entries when a pending Statement Row belongs to the same Source Account and its description contains the rule match text. Ledgerly can offer to create a rule after Approval, but the Founder-Operator must confirm creation.
 
 ## Monthly Transaction Files
 

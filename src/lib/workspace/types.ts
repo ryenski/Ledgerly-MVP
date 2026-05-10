@@ -48,6 +48,8 @@ export type SuggestedEntry = {
   sourceFileName: string;
   importFingerprint: string;
   linkedStatementRow?: LinkedStatementRow | null;
+  suggestedLedgerAccount?: string | null;
+  categorizationRuleId?: string | null;
 };
 
 export type LinkedStatementRow = {
@@ -76,6 +78,26 @@ export type BrokenProvenance = {
   statementRowId: string;
   ledgerlyEntryId?: string | null;
   reason: string;
+};
+
+export type CategorizationRule = {
+  id: string;
+  sourceAccount: string;
+  matchText: string;
+  ledgerAccount: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreateCategorizationRuleInput = {
+  workspaceRootPath: string;
+  sourceAccount: string;
+  matchText: string;
+  ledgerAccount: string;
+};
+
+export type UpdateCategorizationRuleInput = CreateCategorizationRuleInput & {
+  id: string;
 };
 
 export type WorkspaceManifest = {

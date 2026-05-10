@@ -1,5 +1,6 @@
 pub mod approval;
 pub mod beancount;
+pub mod categorization_rules;
 pub mod create;
 pub mod errors;
 pub mod imports;

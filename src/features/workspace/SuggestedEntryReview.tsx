@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { LedgerStatus, SuggestedEntry } from "../../lib/workspace/types";
 
@@ -71,6 +71,12 @@ function SuggestedEntryCard({
   const isTransfer = entry.kind === "transfer";
   const linkedRow = entry.linkedStatementRow;
 
+  useEffect(() => {
+    if (entry.suggestedLedgerAccount) {
+      setLedgerAccount(entry.suggestedLedgerAccount);
+    }
+  }, [entry.statementRowId, entry.suggestedLedgerAccount]);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (approvalBlocked) return;
@@ -107,6 +113,11 @@ function SuggestedEntryCard({
         <p className="eyebrow">{isTransfer ? "Transfer Match" : "Entry Preview"}</p>
         <h3>{entry.description}</h3>
         <p>{entry.postedDate}</p>
+        {entry.suggestedLedgerAccount ? (
+          <p className="rule-suggestion">
+            Rule suggestion: {entry.suggestedLedgerAccount}
+          </p>
+        ) : null}
       </div>
 
       <div className="journal-detail">

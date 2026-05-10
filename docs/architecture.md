@@ -19,6 +19,7 @@ flowchart TB
       SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
       CsvImportSetup[src/features/workspace/CsvImportSetup.tsx]
       SuggestedEntryReview[src/features/workspace/SuggestedEntryReview.tsx]
+      CategorizationRulesPanel[src/features/workspace/CategorizationRulesPanel.tsx]
       BrokenProvenanceUI[Broken Provenance UI]
     end
 
@@ -33,6 +34,7 @@ flowchart TB
       SourceAccounts[src-tauri/src/workspace/source_accounts.rs]
       CsvImports[src-tauri/src/workspace/imports.rs]
       Approval[src-tauri/src/workspace/approval.rs]
+      CategorizationRules[src-tauri/src/workspace/categorization_rules.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
       Types[src-tauri/src/workspace/types.rs]
@@ -67,6 +69,7 @@ flowchart TB
   WorkspaceScreens --> SourceAccountSetup
   WorkspaceScreens --> CsvImportSetup
   WorkspaceScreens --> SuggestedEntryReview
+  WorkspaceScreens --> CategorizationRulesPanel
   WorkspaceScreens --> BrokenProvenanceUI
   WorkspaceApi --> Commands
   Commands --> Create
@@ -75,6 +78,7 @@ flowchart TB
   Commands --> SourceAccounts
   Commands --> CsvImports
   Commands --> Approval
+  Commands --> CategorizationRules
   Create --> Beancount
   Create --> Paths
   Create --> Types
@@ -86,6 +90,7 @@ flowchart TB
   Approval --> Validation
   Approval --> Open
   Approval --> Sqlite
+  Approval --> CategorizationRules
   Open --> Types
   Open --> Errors
   Validation --> Errors
@@ -98,6 +103,7 @@ flowchart TB
   SourceAccountSetup --> WorkspaceApi
   CsvImportSetup --> WorkspaceApi
   SuggestedEntryReview --> WorkspaceApi
+  CategorizationRulesPanel --> WorkspaceApi
   SourceAccounts --> AccountsBean
   SourceAccounts --> OpeningBalances
   CsvImports --> Sqlite
@@ -169,7 +175,8 @@ sequenceDiagram
   UI->>API: getSuggestedEntries(path)
   API->>Cmd: invoke("get_suggested_entries")
   Cmd->>Core: approval::get_suggested_entries(path)
-  Core-->>UI: Standard Suggested Entries and explicit Transfer Matches
+  Core->>Disk: apply matching Categorization Rules from SQLite
+  Core-->>UI: Standard Suggested Entries, rule suggestions, and explicit Transfer Matches
   User->>UI: Approve Entry
   UI->>API: approveSuggestedEntry(input)
   API->>Cmd: invoke("approve_suggested_entry")
@@ -180,6 +187,14 @@ sequenceDiagram
   Core->>Disk: ensure main.bean includes month file
   Core->>Disk: mark Statement Row accounted with approved entry id and file
   Core-->>UI: Refreshed Workspace summary
+
+  UI->>User: Offer Categorization Rule
+  User->>UI: Confirm Create Rule
+  UI->>API: createCategorizationRule(input)
+  API->>Cmd: invoke("create_categorization_rule")
+  Cmd->>Core: categorization_rules::create_categorization_rule(input)
+  Core->>Disk: persist source-scoped rule in SQLite
+  Core-->>UI: Confirmed Categorization Rule
 
   User->>UI: Approve Transfer
   UI->>API: approveTransferEntry(input)
@@ -230,6 +245,7 @@ flowchart LR
     OperationLog[operation_log]
     SourceMappings[source_mappings]
     StatementRows[statement_rows with import_fingerprint and ledgerly_entry_id]
+    CategorizationRulesTable[categorization_rules]
     StagingPlaceholder[staging_area_placeholder]
     MappingPlaceholder[source_mappings_placeholder]
     RulesPlaceholder[categorization_rules_placeholder]
@@ -240,6 +256,7 @@ flowchart LR
   LedgerlyManaged --> OpenWorkspace[Open App-Created Workspace]
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
+  CategorizationRulesTable --> SuggestedEntries
   StatementRows --> SuggestedEntries[Standard Suggested Entries]
   StatementRows --> TransferMatches[User-approved Transfer Matches]
   StatementRows --> ProvenanceCheck[Broken Provenance Check]
@@ -279,6 +296,8 @@ sequenceDiagram
 - The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
 - Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
+- Categorization Rules are user-confirmed SQLite records scoped to Source Account by default, visible/editable in the Workspace overview, and used to prefill future Standard Suggested Entries before any future AI suggestion layer.
+- Approval can offer a Categorization Rule after a non-transfer entry is approved, but the rule is not created until the Founder-Operator confirms it.
 - Transfer Matches are suggested from opposite-signed same-date Statement Rows across different Source Accounts, never auto-approved, and approved as one balanced Beancount Transfer Entry that marks both linked Statement Rows accounted.
 - One-sided transfer hints can appear when a Statement Row description looks like a transfer or payment, but they do not claim another row or write an approval without a linked match.
 - Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
