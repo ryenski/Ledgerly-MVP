@@ -1,4 +1,5 @@
 use crate::workspace::errors::{WorkspaceError, WorkspaceErrorCode};
+use crate::workspace::imports::ensure_import_tables;
 use crate::workspace::open::open_workspace;
 use crate::workspace::types::{LedgerStatus, WorkspaceSummary};
 use crate::workspace::validation::validate_workspace;
@@ -7,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::Path;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +18,8 @@ pub struct SuggestedEntry {
     pub description: String,
     pub source_account: String,
     pub source_amount: String,
+    pub source_file_name: String,
+    pub import_fingerprint: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -24,6 +28,14 @@ pub struct ApproveSuggestedEntryInput {
     pub workspace_root_path: String,
     pub statement_row_id: String,
     pub ledger_account: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrokenProvenance {
+    pub statement_row_id: String,
+    pub ledgerly_entry_id: Option<String>,
+    pub reason: String,
 }
 
 pub fn get_suggested_entries(
@@ -35,9 +47,11 @@ pub fn get_suggested_entries(
             .join(".ledgerly")
             .join("ledgerly.sqlite"),
     )?;
+    ensure_import_tables(&connection)?;
+    ensure_provenance_columns(&connection)?;
     let mut statement = connection.prepare(
         "
-        select id, posted_date, description, source_account, source_amount
+        select id, posted_date, description, source_account, source_amount, source_file_name, import_fingerprint
         from statement_rows
         where status = 'pending'
         order by posted_date, description
@@ -51,10 +65,63 @@ pub fn get_suggested_entries(
                 description: row.get(2)?,
                 source_account: row.get(3)?,
                 source_amount: row.get(4)?,
+                source_file_name: row.get(5)?,
+                import_fingerprint: row.get(6)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(entries)
+}
+
+pub fn get_broken_provenance(
+    workspace_root_path: impl AsRef<Path>,
+) -> Result<Vec<BrokenProvenance>, WorkspaceError> {
+    let root = workspace_root_path.as_ref();
+    let connection = Connection::open(root.join(".ledgerly").join("ledgerly.sqlite"))?;
+    ensure_import_tables(&connection)?;
+    ensure_provenance_columns(&connection)?;
+    let rows = load_accounted_rows(&connection)?;
+    let mut broken = Vec::new();
+
+    for row in rows {
+        let Some(ledgerly_entry_id) = row.ledgerly_entry_id.clone() else {
+            broken.push(BrokenProvenance {
+                statement_row_id: row.statement_row_id,
+                ledgerly_entry_id: None,
+                reason: "Accounted Statement Row has no Ledgerly entry id.".to_string(),
+            });
+            continue;
+        };
+        let Some(ledger_entry_file) = row.ledger_entry_file.clone() else {
+            broken.push(BrokenProvenance {
+                statement_row_id: row.statement_row_id,
+                ledgerly_entry_id: Some(ledgerly_entry_id),
+                reason: "Accounted Statement Row has no ledger entry file.".to_string(),
+            });
+            continue;
+        };
+        let ledger_path = root.join(&ledger_entry_file);
+        let contents = match fs::read_to_string(&ledger_path) {
+            Ok(contents) => contents,
+            Err(_) => {
+                broken.push(BrokenProvenance {
+                    statement_row_id: row.statement_row_id,
+                    ledgerly_entry_id: Some(ledgerly_entry_id),
+                    reason: "Ledger entry file is missing.".to_string(),
+                });
+                continue;
+            }
+        };
+        if !entry_has_matching_metadata(&contents, &ledgerly_entry_id, &row) {
+            broken.push(BrokenProvenance {
+                statement_row_id: row.statement_row_id,
+                ledgerly_entry_id: Some(ledgerly_entry_id),
+                reason: "Ledgerly Entry Metadata is missing or changed.".to_string(),
+            });
+        }
+    }
+
+    Ok(broken)
 }
 
 pub fn approve_suggested_entry(
@@ -71,9 +138,12 @@ pub fn approve_suggested_entry(
     ensure_ledger_account_exists(root, &input.ledger_account)?;
 
     let connection = Connection::open(root.join(".ledgerly").join("ledgerly.sqlite"))?;
+    ensure_import_tables(&connection)?;
+    ensure_provenance_columns(&connection)?;
     let suggested_entry = load_pending_suggested_entry(&connection, &input.statement_row_id)?;
     let source_amount = parse_amount(&suggested_entry.source_amount)?;
     let balancing_amount = -source_amount;
+    let ledgerly_entry_id = Uuid::new_v4().to_string();
 
     let monthly_relative_path = monthly_transaction_file(&suggested_entry.posted_date)?;
     let monthly_path = root.join(&monthly_relative_path);
@@ -86,11 +156,22 @@ pub fn approve_suggested_entry(
         &suggested_entry,
         &input.ledger_account,
         balancing_amount,
+        &ledgerly_entry_id,
     )?;
 
     connection.execute(
-        "update statement_rows set status = 'accounted' where id = ?1",
-        [input.statement_row_id],
+        "
+        update statement_rows
+        set status = 'accounted',
+            ledgerly_entry_id = ?2,
+            ledger_entry_file = ?3
+        where id = ?1
+        ",
+        (
+            input.statement_row_id,
+            ledgerly_entry_id,
+            monthly_relative_path,
+        ),
     )?;
 
     open_workspace(root)
@@ -103,7 +184,7 @@ fn load_pending_suggested_entry(
     connection
         .query_row(
             "
-            select id, posted_date, description, source_account, source_amount
+            select id, posted_date, description, source_account, source_amount, source_file_name, import_fingerprint
             from statement_rows
             where id = ?1 and status = 'pending'
             ",
@@ -115,6 +196,8 @@ fn load_pending_suggested_entry(
                     description: row.get(2)?,
                     source_account: row.get(3)?,
                     source_amount: row.get(4)?,
+                    source_file_name: row.get(5)?,
+                    import_fingerprint: row.get(6)?,
                 })
             },
         )
@@ -175,6 +258,7 @@ fn append_approved_entry(
     suggested_entry: &SuggestedEntry,
     ledger_account: &str,
     balancing_amount: f64,
+    ledgerly_entry_id: &str,
 ) -> Result<(), WorkspaceError> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -182,9 +266,13 @@ fn append_approved_entry(
         .open(monthly_path)?;
     writeln!(
         file,
-        "\n{} * \"{}\"\n  {}  {} USD\n  {}  {:.2} USD",
+        "\n{} * \"{}\"\n  ledgerly_entry_id: \"{}\"\n  import_fingerprint: \"{}\"\n  source_account: \"{}\"\n  source_file_name: \"{}\"\n  {}  {} USD\n  {}  {:.2} USD",
         suggested_entry.posted_date,
         suggested_entry.description,
+        ledgerly_entry_id,
+        suggested_entry.import_fingerprint,
+        suggested_entry.source_account,
+        suggested_entry.source_file_name,
         suggested_entry.source_account,
         suggested_entry.source_amount,
         ledger_account,
@@ -193,10 +281,98 @@ fn append_approved_entry(
     .map_err(WorkspaceError::from)
 }
 
+fn ensure_provenance_columns(connection: &Connection) -> Result<(), WorkspaceError> {
+    let columns = connection
+        .prepare("pragma table_info(statement_rows)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !columns.iter().any(|column| column == "ledgerly_entry_id") {
+        connection.execute(
+            "alter table statement_rows add column ledgerly_entry_id text",
+            [],
+        )?;
+    }
+    if !columns.iter().any(|column| column == "ledger_entry_file") {
+        connection.execute(
+            "alter table statement_rows add column ledger_entry_file text",
+            [],
+        )?;
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct AccountedStatementRow {
+    statement_row_id: String,
+    source_account: String,
+    source_file_name: String,
+    import_fingerprint: String,
+    ledgerly_entry_id: Option<String>,
+    ledger_entry_file: Option<String>,
+}
+
+fn load_accounted_rows(
+    connection: &Connection,
+) -> Result<Vec<AccountedStatementRow>, WorkspaceError> {
+    let mut statement = connection.prepare(
+        "
+        select id, source_account, source_file_name, import_fingerprint, ledgerly_entry_id, ledger_entry_file
+        from statement_rows
+        where status = 'accounted'
+        order by posted_date, description
+        ",
+    )?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(AccountedStatementRow {
+                statement_row_id: row.get(0)?,
+                source_account: row.get(1)?,
+                source_file_name: row.get(2)?,
+                import_fingerprint: row.get(3)?,
+                ledgerly_entry_id: row.get(4)?,
+                ledger_entry_file: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+fn entry_has_matching_metadata(
+    contents: &str,
+    ledgerly_entry_id: &str,
+    row: &AccountedStatementRow,
+) -> bool {
+    let Some(entry) = ledger_entry_block(contents, ledgerly_entry_id) else {
+        return false;
+    };
+
+    entry.contains(&format!("  ledgerly_entry_id: \"{ledgerly_entry_id}\""))
+        && entry.contains(&format!(
+            "  import_fingerprint: \"{}\"",
+            row.import_fingerprint
+        ))
+        && entry.contains(&format!("  source_account: \"{}\"", row.source_account))
+        && entry.contains(&format!("  source_file_name: \"{}\"", row.source_file_name))
+}
+
+fn ledger_entry_block<'a>(contents: &'a str, ledgerly_entry_id: &str) -> Option<&'a str> {
+    let needle = format!("ledgerly_entry_id: \"{ledgerly_entry_id}\"");
+    let match_index = contents.find(&needle)?;
+    let before = &contents[..match_index];
+    let start = before.rfind("\n\n").map(|index| index + 2).unwrap_or(0);
+    let after = &contents[match_index..];
+    let end = after
+        .find("\n\n")
+        .map(|index| match_index + index)
+        .unwrap_or(contents.len());
+    Some(&contents[start..end])
+}
+
 #[cfg(test)]
 mod tests {
     use crate::workspace::approval::{
-        approve_suggested_entry, get_suggested_entries, ApproveSuggestedEntryInput,
+        approve_suggested_entry, get_broken_provenance, get_suggested_entries,
+        ApproveSuggestedEntryInput,
     };
     use crate::workspace::create::create_workspace;
     use crate::workspace::imports::{import_statement_rows, CsvImportInput, CsvSourceMappingInput};
@@ -244,7 +420,10 @@ mod tests {
 
         let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
         assert_eq!(suggested_entries.len(), 1);
-        assert_eq!(suggested_entries[0].source_account, "Assets:Bank:Operating-Checking");
+        assert_eq!(
+            suggested_entries[0].source_account,
+            "Assets:Bank:Operating-Checking"
+        );
         assert_eq!(suggested_entries[0].source_amount, "-29.99");
 
         let summary = approve_suggested_entry(ApproveSuggestedEntryInput {
@@ -259,6 +438,10 @@ mod tests {
         let monthly_file = Path::new(&created.root_path).join("transactions/2026-01.bean");
         let contents = fs::read_to_string(monthly_file).unwrap();
         assert!(contents.contains("2026-01-04 * \"Software\""));
+        assert!(contents.contains("  ledgerly_entry_id: \""));
+        assert!(contents.contains("  import_fingerprint: \""));
+        assert!(contents.contains("  source_account: \"Assets:Bank:Operating-Checking\""));
+        assert!(contents.contains("  source_file_name: \"checking.csv\""));
         assert!(contents.contains("Assets:Bank:Operating-Checking  -29.99 USD"));
         assert!(contents.contains("Expenses:Software  29.99 USD"));
 
@@ -272,6 +455,103 @@ mod tests {
             .query_row("select status from statement_rows", [], |row| row.get(0))
             .unwrap();
         assert_eq!(status, "accounted");
+        let ledgerly_entry_id: String = connection
+            .query_row("select ledgerly_entry_id from statement_rows", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert!(!ledgerly_entry_id.is_empty());
+        let ledger_entry_file: String = connection
+            .query_row("select ledger_entry_file from statement_rows", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(ledger_entry_file, "transactions/2026-01.bean");
+        assert!(get_broken_provenance(&created.root_path)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn opens_empty_review_and_provenance_views_before_first_import() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        assert!(get_suggested_entries(&created.root_path)
+            .unwrap()
+            .is_empty());
+        assert!(get_broken_provenance(&created.root_path)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn surfaces_broken_provenance_without_invalidating_the_ledger() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-04,Software,-29.99\n".to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+        let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
+        approve_suggested_entry(ApproveSuggestedEntryInput {
+            workspace_root_path: created.root_path.clone(),
+            statement_row_id: suggested_entries[0].statement_row_id.clone(),
+            ledger_account: "Expenses:Software".to_string(),
+        })
+        .unwrap();
+
+        let monthly_file = Path::new(&created.root_path).join("transactions/2026-01.bean");
+        let contents = fs::read_to_string(&monthly_file).unwrap();
+        fs::write(
+            &monthly_file,
+            contents.replace(
+                "  import_fingerprint: \"",
+                "  changed_import_fingerprint: \"",
+            ),
+        )
+        .unwrap();
+
+        let reopened = crate::workspace::open::open_workspace(&created.root_path).unwrap();
+        assert_eq!(reopened.ledger_status, LedgerStatus::Valid);
+        let broken = get_broken_provenance(&created.root_path).unwrap();
+        assert_eq!(broken.len(), 1);
+        assert_eq!(
+            broken[0].statement_row_id,
+            suggested_entries[0].statement_row_id
+        );
+        assert!(broken[0].reason.contains("missing or changed"));
     }
 
     #[test]
@@ -321,6 +601,9 @@ mod tests {
         })
         .unwrap_err();
 
-        assert_eq!(error.code, crate::workspace::WorkspaceErrorCode::InvalidLedger);
+        assert_eq!(
+            error.code,
+            crate::workspace::WorkspaceErrorCode::InvalidLedger
+        );
     }
 }

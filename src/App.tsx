@@ -4,6 +4,7 @@ import {
   addSourceAccount,
   approveSuggestedEntry,
   createWorkspace,
+  getBrokenProvenance,
   getSuggestedEntries,
   importStatementRows,
   openWorkspace,
@@ -13,6 +14,7 @@ import {
 } from "./lib/workspace/api";
 import type {
   CsvSourceMappingInput,
+  BrokenProvenance,
   SourceAccountKind,
   SuggestedEntry,
   WorkspaceCreateInput,
@@ -36,6 +38,7 @@ export default function App() {
   const [view, setView] = useState<View>("start");
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
   const [suggestedEntries, setSuggestedEntries] = useState<SuggestedEntry[]>([]);
+  const [brokenProvenance, setBrokenProvenance] = useState<BrokenProvenance[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(input: WorkspaceCreateInput) {
@@ -44,6 +47,7 @@ export default function App() {
       const created = await createWorkspace(input);
       setWorkspace(created);
       setSuggestedEntries([]);
+      setBrokenProvenance([]);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -56,6 +60,7 @@ export default function App() {
       const opened = await openWorkspace(path);
       setWorkspace(opened);
       setSuggestedEntries(await getSuggestedEntries(opened.rootPath));
+      setBrokenProvenance(await getBrokenProvenance(opened.rootPath));
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -82,6 +87,7 @@ export default function App() {
         ledgerStatus: ledgerValidation.status,
         ledgerValidation,
       });
+      setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -101,6 +107,7 @@ export default function App() {
       });
       setWorkspace(updated);
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
+      setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -121,6 +128,7 @@ export default function App() {
       });
       await handleValidateWorkspace();
       setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
+      setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -139,6 +147,7 @@ export default function App() {
       });
       setWorkspace(updated);
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
+      setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -199,6 +208,7 @@ export default function App() {
         <WorkspaceOverview
           workspace={workspace}
           suggestedEntries={suggestedEntries}
+          brokenProvenance={brokenProvenance}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}

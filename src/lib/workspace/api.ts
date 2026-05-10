@@ -4,6 +4,7 @@ import { openPath } from "@tauri-apps/plugin-opener";
 import type {
   AddSourceAccountInput,
   ApproveSuggestedEntryInput,
+  BrokenProvenance,
   CsvImportInput,
   CsvImportResult,
   LedgerValidationSummary,
@@ -19,6 +20,7 @@ type WorkspaceApi = {
   addSourceAccount: (input: AddSourceAccountInput) => Promise<WorkspaceSummary>;
   importStatementRows: (input: CsvImportInput) => Promise<CsvImportResult>;
   getSuggestedEntries: (path: string) => Promise<SuggestedEntry[]>;
+  getBrokenProvenance: (path: string) => Promise<BrokenProvenance[]>;
   approveSuggestedEntry: (input: ApproveSuggestedEntryInput) => Promise<WorkspaceSummary>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
@@ -78,6 +80,15 @@ export async function getSuggestedEntries(path: string): Promise<SuggestedEntry[
     return window.__LEDGERLY_TEST_API__.getSuggestedEntries(path);
   }
   return invoke<SuggestedEntry[]>("get_suggested_entries", { path });
+}
+
+export async function getBrokenProvenance(
+  path: string,
+): Promise<BrokenProvenance[]> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.getBrokenProvenance(path);
+  }
+  return invoke<BrokenProvenance[]>("get_broken_provenance", { path });
 }
 
 export async function approveSuggestedEntry(

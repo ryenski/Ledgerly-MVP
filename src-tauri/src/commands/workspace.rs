@@ -1,4 +1,6 @@
-use crate::workspace::approval::{self, ApproveSuggestedEntryInput, SuggestedEntry};
+use crate::workspace::approval::{
+    self, ApproveSuggestedEntryInput, BrokenProvenance, SuggestedEntry,
+};
 use crate::workspace::create;
 use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
 use crate::workspace::open;
@@ -37,6 +39,11 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
 #[tauri::command]
 pub fn get_suggested_entries(path: String) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
     approval::get_suggested_entries(path)
+}
+
+#[tauri::command]
+pub fn get_broken_provenance(path: String) -> Result<Vec<BrokenProvenance>, WorkspaceError> {
+    approval::get_broken_provenance(path)
 }
 
 #[tauri::command]

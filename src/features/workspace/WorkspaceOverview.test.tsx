@@ -109,4 +109,27 @@ describe("WorkspaceOverview", () => {
     expect(screen.getByRole("button", { name: "Approval blocked" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "MVP Reports blocked" })).toBeDisabled();
   });
+
+  it("shows broken provenance separately from ledger validation", () => {
+    render(
+      <WorkspaceOverview
+        workspace={workspace}
+        brokenProvenance={[
+          {
+            statementRowId: "row-1",
+            ledgerlyEntryId: "entry-1",
+            reason: "Ledgerly Entry Metadata is missing or changed.",
+          },
+        ]}
+        onReveal={vi.fn()}
+        onOpenAnother={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Broken Provenance");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Ledgerly Entry Metadata is missing or changed.",
+    );
+    expect(screen.getByText("Ledger valid")).toBeInTheDocument();
+  });
 });
