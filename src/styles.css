@@ -17,7 +17,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -196,7 +197,8 @@ label {
   font-weight: 700;
 }
 
-input {
+input,
+select {
   min-height: 44px;
   width: 100%;
   border: 1px solid #cbd0c7;
@@ -282,6 +284,10 @@ dd {
   gap: 8px;
   margin: 0;
   padding-left: 20px;
+}
+
+.source-account-setup {
+  margin-top: 28px;
 }
 
 @media (max-width: 760px) {

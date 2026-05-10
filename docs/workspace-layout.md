@@ -26,6 +26,13 @@ The Beancount files are the accounting source of truth. `main.bean` includes the
 
 The Starter Chart of Accounts is intentionally small and editable. It targets one cash-basis US service MVP Business using `USD`.
 
+Source Accounts are added as normal Beancount accounts under the Starter Chart:
+
+- bank Source Accounts are appended under `Assets:Bank`
+- credit-card Source Accounts are appended under `Liabilities:CreditCards`
+
+When the Founder-Operator records a known Opening Balance, Ledgerly appends a Beancount `balance` directive to `opening-balances.bean` using the Workspace books start date.
+
 ## Ledgerly-Managed Local Data
 
 `.ledgerly/` stores Ledgerly-managed local data:

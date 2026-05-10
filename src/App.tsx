@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import {
+  addSourceAccount,
   createWorkspace,
   openWorkspace,
   pickDirectory,
   revealWorkspace,
   validateWorkspace,
 } from "./lib/workspace/api";
-import type { WorkspaceCreateInput, WorkspaceSummary } from "./lib/workspace/types";
+import type {
+  SourceAccountKind,
+  WorkspaceCreateInput,
+  WorkspaceSummary,
+} from "./lib/workspace/types";
 import { CreateWorkspaceForm } from "./features/workspace/CreateWorkspaceForm";
 import { OpenWorkspaceForm } from "./features/workspace/OpenWorkspaceForm";
 import { WorkspaceOverview } from "./features/workspace/WorkspaceOverview";
@@ -74,6 +79,24 @@ export default function App() {
     }
   }
 
+  async function handleAddSourceAccount(input: {
+    kind: SourceAccountKind;
+    name: string;
+    openingBalance: string | null;
+  }) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      const updated = await addSourceAccount({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      setWorkspace(updated);
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
   useEffect(() => {
     if (view !== "overview" || !workspace) return;
 
@@ -130,6 +153,7 @@ export default function App() {
           workspace={workspace}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
+          onAddSourceAccount={handleAddSourceAccount}
           onOpenAnother={() => {
             setError(null);
             setView("open");

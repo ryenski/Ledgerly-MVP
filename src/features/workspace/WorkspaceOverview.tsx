@@ -1,10 +1,17 @@
 import type { WorkspaceSummary } from "../../lib/workspace/types";
+import { SourceAccountSetup } from "./SourceAccountSetup";
+import type { SourceAccountKind } from "../../lib/workspace/types";
 
 type WorkspaceOverviewProps = {
   workspace: WorkspaceSummary;
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
+  onAddSourceAccount?: (input: {
+    kind: SourceAccountKind;
+    name: string;
+    openingBalance: string | null;
+  }) => Promise<void> | void;
   error?: string | null;
 };
 
@@ -21,6 +28,7 @@ export function WorkspaceOverview({
   onReveal,
   onOpenAnother,
   onValidate,
+  onAddSourceAccount,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -91,6 +99,10 @@ export function WorkspaceOverview({
           ))}
         </ul>
       </section>
+
+      {onAddSourceAccount ? (
+        <SourceAccountSetup onAddSourceAccount={onAddSourceAccount} />
+      ) : null}
 
       <div className="action-row">
         <button className="primary-button" type="button" onClick={onReveal}>

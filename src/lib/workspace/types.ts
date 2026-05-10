@@ -5,6 +5,15 @@ export type WorkspaceCreateInput = {
   parentDirectory: string;
 };
 
+export type SourceAccountKind = "bank" | "creditCard";
+
+export type AddSourceAccountInput = {
+  workspaceRootPath: string;
+  kind: SourceAccountKind;
+  name: string;
+  openingBalance?: string | null;
+};
+
 export type WorkspaceManifest = {
   schemaVersion: 1;
   appCreated: true;
