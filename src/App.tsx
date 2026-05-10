@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { AppShell } from "./components/AppShell";
 import {
   addSourceAccount,
+  approveSuggestedEntry,
   createWorkspace,
+  getSuggestedEntries,
   importStatementRows,
   openWorkspace,
   pickDirectory,
@@ -10,8 +12,9 @@ import {
   validateWorkspace,
 } from "./lib/workspace/api";
 import type {
-  SourceAccountKind,
   CsvSourceMappingInput,
+  SourceAccountKind,
+  SuggestedEntry,
   WorkspaceCreateInput,
   WorkspaceSummary,
 } from "./lib/workspace/types";
@@ -32,6 +35,7 @@ function userFacingError(error: unknown): string {
 export default function App() {
   const [view, setView] = useState<View>("start");
   const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null);
+  const [suggestedEntries, setSuggestedEntries] = useState<SuggestedEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(input: WorkspaceCreateInput) {
@@ -39,6 +43,7 @@ export default function App() {
     try {
       const created = await createWorkspace(input);
       setWorkspace(created);
+      setSuggestedEntries([]);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -50,6 +55,7 @@ export default function App() {
     try {
       const opened = await openWorkspace(path);
       setWorkspace(opened);
+      setSuggestedEntries(await getSuggestedEntries(opened.rootPath));
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -94,6 +100,7 @@ export default function App() {
         ...input,
       });
       setWorkspace(updated);
+      setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -113,6 +120,25 @@ export default function App() {
         ...input,
       });
       await handleValidateWorkspace();
+      setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
+  async function handleApproveSuggestedEntry(input: {
+    statementRowId: string;
+    ledgerAccount: string;
+  }) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      const updated = await approveSuggestedEntry({
+        workspaceRootPath: workspace.rootPath,
+        ...input,
+      });
+      setWorkspace(updated);
+      setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -172,10 +198,12 @@ export default function App() {
       {view === "overview" && workspace ? (
         <WorkspaceOverview
           workspace={workspace}
+          suggestedEntries={suggestedEntries}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}
           onImportStatementRows={handleImportStatementRows}
+          onApproveSuggestedEntry={handleApproveSuggestedEntry}
           onOpenAnother={() => {
             setError(null);
             setView("open");

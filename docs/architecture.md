@@ -18,6 +18,7 @@ flowchart TB
       InvalidLedgerUI[Invalid Ledger State UI]
       SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
       CsvImportSetup[src/features/workspace/CsvImportSetup.tsx]
+      SuggestedEntryReview[src/features/workspace/SuggestedEntryReview.tsx]
     end
 
     subgraph TauriRuntime[Tauri Runtime]
@@ -30,6 +31,7 @@ flowchart TB
       Validation[src-tauri/src/workspace/validation.rs]
       SourceAccounts[src-tauri/src/workspace/source_accounts.rs]
       CsvImports[src-tauri/src/workspace/imports.rs]
+      Approval[src-tauri/src/workspace/approval.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
       Types[src-tauri/src/workspace/types.rs]
@@ -63,12 +65,14 @@ flowchart TB
   WorkspaceScreens --> InvalidLedgerUI
   WorkspaceScreens --> SourceAccountSetup
   WorkspaceScreens --> CsvImportSetup
+  WorkspaceScreens --> SuggestedEntryReview
   WorkspaceApi --> Commands
   Commands --> Create
   Commands --> Open
   Commands --> Validation
   Commands --> SourceAccounts
   Commands --> CsvImports
+  Commands --> Approval
   Create --> Beancount
   Create --> Paths
   Create --> Types
@@ -77,6 +81,8 @@ flowchart TB
   SourceAccounts --> Open
   SourceAccounts --> Validation
   CsvImports --> Types
+  Approval --> Validation
+  Approval --> Open
   Open --> Types
   Open --> Errors
   Validation --> Errors
@@ -88,9 +94,12 @@ flowchart TB
   InvalidLedgerUI --> WorkspaceApi
   SourceAccountSetup --> WorkspaceApi
   CsvImportSetup --> WorkspaceApi
+  SuggestedEntryReview --> WorkspaceApi
   SourceAccounts --> AccountsBean
   SourceAccounts --> OpeningBalances
   CsvImports --> Sqlite
+  Approval --> Transactions
+  Approval --> Sqlite
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -152,6 +161,21 @@ sequenceDiagram
   API-->>UI: CsvImportResult
   UI-->>User: CSV import complete with imported and skipped counts
 
+  User->>UI: Review Suggested Entry
+  UI->>API: getSuggestedEntries(path)
+  API->>Cmd: invoke("get_suggested_entries")
+  Cmd->>Core: approval::get_suggested_entries(path)
+  Core-->>UI: Entry Preview and Journal Detail
+  User->>UI: Approve Entry
+  UI->>API: approveSuggestedEntry(input)
+  API->>Cmd: invoke("approve_suggested_entry")
+  Cmd->>Core: approval::approve_suggested_entry(input)
+  Core->>Core: validation::validate_workspace(path)
+  Core->>Disk: append Monthly Transaction File entry
+  Core->>Disk: ensure main.bean includes month file
+  Core->>Disk: mark Statement Row accounted
+  Core-->>UI: Refreshed Workspace summary
+
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
   API->>Cmd: invoke("open_workspace")
@@ -196,6 +220,7 @@ flowchart LR
   LedgerlyManaged --> OpenWorkspace[Open App-Created Workspace]
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
+  StatementRows --> SuggestedEntries[Suggested Entries]
 ```
 
 ## Agent Issue Workflow
@@ -229,6 +254,7 @@ sequenceDiagram
 - The Source Account setup UI collects bank or credit-card Source Accounts and optional Opening Balances, then refreshes the Workspace summary returned from the native write.
 - The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
+- Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.
@@ -244,5 +270,6 @@ sequenceDiagram
 - Source Account setup appends valid Beancount directives to the readable ledger files rather than storing canonical account setup only in SQLite.
 - CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
+- Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

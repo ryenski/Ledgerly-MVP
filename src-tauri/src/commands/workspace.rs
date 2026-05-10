@@ -1,3 +1,4 @@
+use crate::workspace::approval::{self, ApproveSuggestedEntryInput, SuggestedEntry};
 use crate::workspace::create;
 use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
 use crate::workspace::open;
@@ -31,6 +32,18 @@ pub fn add_source_account(
 #[tauri::command]
 pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, WorkspaceError> {
     imports::import_statement_rows(input)
+}
+
+#[tauri::command]
+pub fn get_suggested_entries(path: String) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
+    approval::get_suggested_entries(path)
+}
+
+#[tauri::command]
+pub fn approve_suggested_entry(
+    input: ApproveSuggestedEntryInput,
+) -> Result<WorkspaceSummary, WorkspaceError> {
+    approval::approve_suggested_entry(input)
 }
 
 #[cfg(test)]
