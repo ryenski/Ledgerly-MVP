@@ -1,6 +1,6 @@
 # Ledgerly Architecture
 
-This document describes the current codebase architecture after the first App-Created Workspace lifecycle slice.
+This document describes the current codebase architecture after the first App-Created Workspace lifecycle slice and the local agent workflow skill used to work ready GitHub issues.
 
 ## Current System
 
@@ -44,7 +44,14 @@ flowchart TB
     Cache[.ledgerly/cache/]
   end
 
+  subgraph AgentWorkflow[Local Agent Workflow]
+    WorkReadySkill[.agents/skills/work-ready-issues/SKILL.md]
+    GitHubIssues[GitHub Issues: ready-for-agent]
+    GitHubPRs[GitHub Pull Requests]
+  end
+
   FounderOperator --> App
+  FounderOperator --> WorkReadySkill
   App --> Shell
   App --> WorkspaceScreens
   WorkspaceScreens --> WorkspaceApi
@@ -65,6 +72,8 @@ flowchart TB
   Validation --> MainBean
   Validation --> AccountsBean
   Validation --> OpeningBalances
+  WorkReadySkill --> GitHubIssues
+  WorkReadySkill --> GitHubPRs
 ```
 
 ## Runtime Flow
@@ -133,6 +142,30 @@ flowchart LR
   Sqlite --> CurrentSqlite
 ```
 
+## Agent Issue Workflow
+
+```mermaid
+sequenceDiagram
+  actor Agent as Codex Agent
+  participant Skill as .agents/skills/work-ready-issues
+  participant Issues as GitHub Issues
+  participant Branch as Issue Branch
+  participant PR as GitHub Pull Request
+  participant Main as main
+
+  Agent->>Skill: Invoke ready-for-agent workflow
+  Skill->>Issues: List open ready-for-agent issues
+  Skill->>Issues: Select next unblocked issue by number
+  Skill->>Branch: Create isolated issue branch
+  Agent->>Branch: Implement smallest complete slice
+  Agent->>Branch: Run focused and standard verification
+  Branch->>PR: Open PR with Closes #issue
+  Agent->>PR: Post code review findings and verification
+  Agent->>Branch: Address actionable review findings
+  PR->>Main: Merge after clear review and passing checks
+  Skill->>Issues: Continue with next eligible issue
+```
+
 ## Boundaries
 
 - React owns presentation state, forms, error rendering, and Workspace overview screens.
@@ -140,6 +173,7 @@ flowchart LR
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, and structural ledger validation.
 - The Workspace folder owns all accounting data needed for this slice. No Ledgerly cloud account is required.
+- `.agents/skills/work-ready-issues/` owns the local AFK workflow for sequentially selecting, implementing, reviewing, merging, and continuing through GitHub issues labeled `ready-for-agent`.
 
 ## Current Constraints
 
