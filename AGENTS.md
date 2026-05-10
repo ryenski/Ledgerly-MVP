@@ -6,6 +6,10 @@ Issues and PRDs are tracked in GitHub Issues for `ryenski/Ledgerly-MVP`. See `do
 
 When opening or updating a PR, always link it to the relevant GitHub issue with a closing keyword such as `Closes #123` so the issue closes automatically when the PR is merged.
 
+### Architecture diagrams
+
+After every turn that changes the codebase, update the relevant architecture diagram docs so they reflect the current state of the implementation. The primary architecture doc is `docs/architecture.md`.
+
 ### Triage labels
 
 The repo uses the default five-label triage vocabulary. See `docs/agents/triage-labels.md`.
