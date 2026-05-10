@@ -52,6 +52,12 @@ Each imported Statement Row gets an Import Fingerprint derived from normalized r
 
 Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
 
+## Monthly Transaction Files
+
+Approval writes non-transfer Suggested Entries to `transactions/YYYY-MM.bean` based on the Statement Row posted date and ensures `main.bean` includes that Monthly Transaction File. Each approved entry includes the Source Account posting from the Statement Row and a balancing posting to the Founder-Operator selected Ledger Account.
+
+After Approval, the source Statement Row status changes from `pending` to `accounted` in the Staging Area. Approval is blocked while Ledger Validation reports Invalid Ledger State.
+
 ## Validation Scope
 
 Ledgerly uses structural Ledger Validation for the current MVP slices:

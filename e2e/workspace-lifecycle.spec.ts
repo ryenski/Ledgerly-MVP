@@ -34,6 +34,12 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
           skippedDuplicateCount: 0,
         };
       },
+      async getSuggestedEntries() {
+        return [];
+      },
+      async approveSuggestedEntry() {
+        return workspace;
+      },
       async pickDirectory() {
         return "/tmp";
       },

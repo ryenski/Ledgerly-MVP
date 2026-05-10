@@ -295,8 +295,33 @@ dd {
 }
 
 .source-account-setup,
-.csv-import-setup {
+.csv-import-setup,
+.suggested-entry-review {
   margin-top: 28px;
+}
+
+.suggested-entry-list {
+  display: grid;
+  gap: 16px;
+}
+
+.suggested-entry-card {
+  display: grid;
+  gap: 16px;
+  border: 1px solid #dfddd5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.suggested-entry-card h3 {
+  margin: 0 0 8px;
+}
+
+.journal-detail dl {
+  display: grid;
+  gap: 10px;
+  margin: 0;
 }
 
 .mapping-grid {

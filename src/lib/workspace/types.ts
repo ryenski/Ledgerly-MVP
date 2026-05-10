@@ -38,6 +38,20 @@ export type CsvImportResult = {
   skippedDuplicateCount: number;
 };
 
+export type SuggestedEntry = {
+  statementRowId: string;
+  postedDate: string;
+  description: string;
+  sourceAccount: string;
+  sourceAmount: string;
+};
+
+export type ApproveSuggestedEntryInput = {
+  workspaceRootPath: string;
+  statementRowId: string;
+  ledgerAccount: string;
+};
+
 export type WorkspaceManifest = {
   schemaVersion: 1;
   appCreated: true;

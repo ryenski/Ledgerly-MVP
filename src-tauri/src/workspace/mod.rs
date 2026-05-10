@@ -1,3 +1,4 @@
+pub mod approval;
 pub mod beancount;
 pub mod create;
 pub mod errors;

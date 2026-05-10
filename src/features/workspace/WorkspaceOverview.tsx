@@ -1,10 +1,16 @@
-import type { CsvSourceMappingInput, WorkspaceSummary } from "../../lib/workspace/types";
+import type {
+  CsvSourceMappingInput,
+  SuggestedEntry,
+  WorkspaceSummary,
+} from "../../lib/workspace/types";
 import { CsvImportSetup } from "./CsvImportSetup";
 import { SourceAccountSetup } from "./SourceAccountSetup";
 import type { SourceAccountKind } from "../../lib/workspace/types";
+import { SuggestedEntryReview } from "./SuggestedEntryReview";
 
 type WorkspaceOverviewProps = {
   workspace: WorkspaceSummary;
+  suggestedEntries?: SuggestedEntry[];
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
@@ -19,6 +25,10 @@ type WorkspaceOverviewProps = {
     csvContents: string;
     mapping: CsvSourceMappingInput;
   }) => Promise<void> | void;
+  onApproveSuggestedEntry?: (input: {
+    statementRowId: string;
+    ledgerAccount: string;
+  }) => Promise<void> | void;
   error?: string | null;
 };
 
@@ -32,11 +42,13 @@ const workspaceFiles = [
 
 export function WorkspaceOverview({
   workspace,
+  suggestedEntries = [],
   onReveal,
   onOpenAnother,
   onValidate,
   onAddSourceAccount,
   onImportStatementRows,
+  onApproveSuggestedEntry,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -114,6 +126,14 @@ export function WorkspaceOverview({
 
       {onImportStatementRows ? (
         <CsvImportSetup onImportStatementRows={onImportStatementRows} />
+      ) : null}
+
+      {onApproveSuggestedEntry ? (
+        <SuggestedEntryReview
+          suggestedEntries={suggestedEntries}
+          ledgerStatus={workspace.ledgerStatus}
+          onApprove={onApproveSuggestedEntry}
+        />
       ) : null}
 
       <div className="action-row">
