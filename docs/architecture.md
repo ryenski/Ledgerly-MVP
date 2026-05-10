@@ -7,6 +7,13 @@ This document describes the current codebase architecture after the first App-Cr
 ```mermaid
 flowchart TB
   FounderOperator[Founder-Operator]
+  AgentOperator[AFK Agent Operator]
+
+  subgraph AgentWorkflows[Local Agent Workflow Skills]
+    WorkOffIssues[.agents/skills/work-off-github-issues full AFK mode]
+    GitHubIssues[GitHub Issues ready-for-agent queue]
+    PullRequests[GitHub Pull Requests]
+  end
 
   subgraph DesktopApp[Ledgerly Local Desktop App]
     subgraph ReactUI[React + TypeScript UI]
@@ -43,6 +50,11 @@ flowchart TB
     Sqlite[.ledgerly/ledgerly.sqlite]
     Cache[.ledgerly/cache/]
   end
+
+  AgentOperator --> WorkOffIssues
+  WorkOffIssues --> GitHubIssues
+  WorkOffIssues --> PullRequests
+  PullRequests --> GitHubIssues
 
   FounderOperator --> App
   App --> Shell
