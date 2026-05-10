@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Ledgerly",
+  "version": "0.1.0",
+  "identifier": "com.ledgerly.mvp",
+  "build": {
+    "beforeDevCommand": "vite --host 127.0.0.1",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Ledgerly",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 880,
+        "minHeight": 620
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "icon": [],
+    "targets": "all"
+  }
+}

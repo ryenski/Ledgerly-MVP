@@ -1,0 +1,54 @@
+use crate::workspace::create;
+use crate::workspace::open;
+use crate::workspace::types::{CreateWorkspaceInput, LedgerValidationSummary, WorkspaceSummary};
+use crate::workspace::validation;
+use crate::workspace::WorkspaceError;
+
+#[tauri::command]
+pub fn create_workspace(input: CreateWorkspaceInput) -> Result<WorkspaceSummary, WorkspaceError> {
+    create::create_workspace(input)
+}
+
+#[tauri::command]
+pub fn open_workspace(path: String) -> Result<WorkspaceSummary, WorkspaceError> {
+    open::open_workspace(path)
+}
+
+#[tauri::command]
+pub fn validate_workspace(path: String) -> Result<LedgerValidationSummary, WorkspaceError> {
+    validation::validate_workspace(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workspace::WorkspaceErrorCode;
+
+    #[test]
+    fn create_workspace_command_returns_structured_errors() {
+        let error = create_workspace(CreateWorkspaceInput {
+            business_name: "".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: ".".to_string(),
+        })
+        .unwrap_err();
+
+        assert_eq!(error.code, WorkspaceErrorCode::InvalidBusinessName);
+    }
+
+    #[test]
+    fn create_and_open_workspace_through_commands() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+
+        let opened = open_workspace(created.root_path).unwrap();
+        assert_eq!(opened.business_name, "Acme Studio");
+    }
+}
