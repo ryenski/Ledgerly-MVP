@@ -30,6 +30,7 @@ flowchart TB
     end
 
     subgraph RustCore[Rust Workspace Core]
+      GoldenPathValidation[src-tauri/src/workspace/golden_path_validation.rs test]
       Create[src-tauri/src/workspace/create.rs]
       Open[src-tauri/src/workspace/open.rs]
       Validation[src-tauri/src/workspace/validation.rs]
@@ -87,6 +88,12 @@ flowchart TB
   Commands --> AiAdapter
   Commands --> CategorizationRules
   Commands --> Reports
+  GoldenPathValidation --> Create
+  GoldenPathValidation --> SourceAccounts
+  GoldenPathValidation --> CsvImports
+  GoldenPathValidation --> Approval
+  GoldenPathValidation --> Validation
+  GoldenPathValidation --> Reports
   Create --> Beancount
   Create --> Paths
   Create --> Types
@@ -318,6 +325,7 @@ sequenceDiagram
   Skill->>Issues: Select next unblocked issue by number
   Skill->>Branch: Create isolated issue branch
   Agent->>Branch: Implement smallest complete slice
+  Agent->>Branch: Add or update Golden Path validation when an issue changes MVP behavior
   Agent->>Branch: Run focused and standard verification
   Branch->>PR: Open PR with Closes #issue
   Agent->>PR: Post code review findings and verification
@@ -344,6 +352,7 @@ sequenceDiagram
 - Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
 - Broken Provenance is surfaced separately from structural Ledger Validation by scanning accounted Statement Rows against Ledgerly Entry Metadata in the readable ledger files.
 - MVP Reports are derived from the readable Beancount ledger files, not from unapproved SQLite Staging Area rows. Reports currently parse Ledgerly-written opening balances and included Monthly Transaction Files to render Income Statement, Expense Breakdown, Source Account Balances, and a basic Balance Sheet.
+- The Golden Path validation test exercises the native workflow from App-Created Workspace setup through CSV import, Approval, Transfer Match approval, Ledger Validation, Staging Area provenance, invalid-ledger blocking, and MVP Reports.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.

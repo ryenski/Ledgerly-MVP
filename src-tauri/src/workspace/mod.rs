@@ -12,5 +12,8 @@ pub mod source_accounts;
 pub mod types;
 pub mod validation;
 
+#[cfg(test)]
+mod golden_path_validation;
+
 pub use errors::{WorkspaceError, WorkspaceErrorCode};
 pub use types::*;
