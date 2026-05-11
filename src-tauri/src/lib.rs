@@ -18,7 +18,8 @@ pub fn run() {
             commands::workspace::update_categorization_rule,
             commands::workspace::get_ai_adapter_config,
             commands::workspace::configure_ai_adapter,
-            commands::workspace::get_ai_context_disclosure
+            commands::workspace::get_ai_context_disclosure,
+            commands::workspace::get_mvp_reports
         ])
         .run(tauri::generate_context!())
         .expect("error while running Ledgerly");

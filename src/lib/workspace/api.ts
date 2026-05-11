@@ -14,6 +14,8 @@ import type {
   CsvImportInput,
   CsvImportResult,
   LedgerValidationSummary,
+  MvpReports,
+  ReportsInput,
   SuggestedEntry,
   UpdateCategorizationRuleInput,
   WorkspaceCreateInput,
@@ -40,6 +42,7 @@ type WorkspaceApi = {
   getAiAdapterConfig: (path: string) => Promise<AiAdapterConfig>;
   configureAiAdapter: (input: ConfigureAiAdapterInput) => Promise<AiAdapterConfig>;
   getAiContextDisclosure: (path: string) => Promise<AiContextDisclosure>;
+  getMvpReports: (input: ReportsInput) => Promise<MvpReports>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
 };
@@ -177,6 +180,13 @@ export async function getAiContextDisclosure(
     return window.__LEDGERLY_TEST_API__.getAiContextDisclosure(path);
   }
   return invoke<AiContextDisclosure>("get_ai_context_disclosure", { path });
+}
+
+export async function getMvpReports(input: ReportsInput): Promise<MvpReports> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.getMvpReports(input);
+  }
+  return invoke<MvpReports>("get_mvp_reports", { input });
 }
 
 export async function pickDirectory(): Promise<string | null> {

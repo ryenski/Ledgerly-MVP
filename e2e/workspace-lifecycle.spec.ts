@@ -81,6 +81,30 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
           fieldsSent: ["Statement Row", "Chart of Accounts"],
         };
       },
+      async getMvpReports() {
+        return {
+          periodStart: "2026-01-01",
+          periodEnd: "2026-01-31",
+          incomeStatement: {
+            income: [],
+            expenses: [],
+            totalIncome: 0,
+            totalExpenses: 0,
+            netIncome: 0,
+          },
+          expenseBreakdown: [],
+          sourceAccountBalances: [],
+          balanceSheet: {
+            assets: [],
+            liabilities: [],
+            equity: [],
+            retainedEarnings: 0,
+            totalAssets: 0,
+            totalLiabilities: 0,
+            totalEquity: 0,
+          },
+        };
+      },
       async pickDirectory() {
         return "/tmp";
       },

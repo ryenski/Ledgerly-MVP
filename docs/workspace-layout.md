@@ -79,6 +79,12 @@ Raw CSV row JSON, AI explanations, and confidence scores stay in Ledgerly-manage
 
 Approval is blocked while Ledger Validation reports Invalid Ledger State. Broken Provenance is separate: if a Manual Ledger Edit removes or changes Ledgerly Entry Metadata while the Beancount files still validate, Ledgerly surfaces Broken Provenance without marking the ledger invalid.
 
+## MVP Reports
+
+MVP Reports read from the validated Beancount ledger files, not from unapproved Statement Rows in the SQLite Staging Area. The current report reader covers Ledgerly-written Opening Balance directives and included Monthly Transaction Files.
+
+For a selected period, Ledgerly renders an Income Statement, Expense Breakdown by Ledger Account, Source Account Balances, and a basic Balance Sheet. Reports are blocked while Ledger Validation reports Invalid Ledger State so a Founder-Operator does not review figures from a known-broken ledger.
+
 ## Validation Scope
 
 Ledgerly uses structural Ledger Validation for the current MVP slices:

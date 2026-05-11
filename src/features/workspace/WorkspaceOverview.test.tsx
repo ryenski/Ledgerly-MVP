@@ -132,4 +132,48 @@ describe("WorkspaceOverview", () => {
     );
     expect(screen.getByText("Ledger valid")).toBeInTheDocument();
   });
+
+  it("loads MVP Reports from the overview", async () => {
+    const user = userEvent.setup();
+    const onLoadReports = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <WorkspaceOverview
+        workspace={workspace}
+        reports={{
+          periodStart: "2026-01-01",
+          periodEnd: "2026-01-31",
+          incomeStatement: {
+            income: [{ account: "Income:Services", amount: 1200 }],
+            expenses: [],
+            totalIncome: 1200,
+            totalExpenses: 0,
+            netIncome: 1200,
+          },
+          expenseBreakdown: [],
+          sourceAccountBalances: [],
+          balanceSheet: {
+            assets: [],
+            liabilities: [],
+            equity: [],
+            retainedEarnings: 1200,
+            totalAssets: 1200,
+            totalLiabilities: 0,
+            totalEquity: 1200,
+          },
+        }}
+        onReveal={vi.fn()}
+        onOpenAnother={vi.fn()}
+        onLoadReports={onLoadReports}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Run Reports" }));
+
+    expect(onLoadReports).toHaveBeenCalledWith({
+      periodStart: "2026-01-01",
+      periodEnd: "2026-01-31",
+    });
+    expect(screen.getByText("Income Statement")).toBeInTheDocument();
+  });
 });
