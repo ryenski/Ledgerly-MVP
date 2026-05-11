@@ -1,3 +1,6 @@
+use crate::workspace::ai_adapter::{
+    self, AiAdapterConfig, AiContextDisclosure, ConfigureAiAdapterInput,
+};
 use crate::workspace::approval::{
     self, ApproveSuggestedEntryInput, ApproveTransferEntryInput, BrokenProvenance, SuggestedEntry,
 };
@@ -80,6 +83,23 @@ pub fn update_categorization_rule(
     input: UpdateCategorizationRuleInput,
 ) -> Result<CategorizationRule, WorkspaceError> {
     categorization_rules::update_categorization_rule(input)
+}
+
+#[tauri::command]
+pub fn get_ai_adapter_config(path: String) -> Result<AiAdapterConfig, WorkspaceError> {
+    ai_adapter::get_ai_adapter_config(path)
+}
+
+#[tauri::command]
+pub fn configure_ai_adapter(
+    input: ConfigureAiAdapterInput,
+) -> Result<AiAdapterConfig, WorkspaceError> {
+    ai_adapter::configure_ai_adapter(input)
+}
+
+#[tauri::command]
+pub fn get_ai_context_disclosure(path: String) -> Result<AiContextDisclosure, WorkspaceError> {
+    ai_adapter::get_ai_context_disclosure(path)
 }
 
 #[cfg(test)]

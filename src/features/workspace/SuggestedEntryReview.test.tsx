@@ -73,6 +73,34 @@ describe("SuggestedEntryReview", () => {
     expect(screen.getByText("Rule suggestion: Expenses:Software")).toBeInTheDocument();
   });
 
+  it("shows AI suggestions without approving them automatically", () => {
+    render(
+      <SuggestedEntryReview
+        suggestedEntries={[
+          {
+            ...suggestedEntries[0],
+            suggestedLedgerAccount: "Expenses:Software",
+            aiSuggestion: {
+              ledgerAccount: "Expenses:Software",
+              payee: "Vendor",
+              narration: "Software",
+              confidence: 0.91,
+              explanation: "Matched software vendor.",
+              needsHumanAttention: false,
+            },
+          },
+        ]}
+        ledgerStatus="valid"
+        onApprove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Ledger Account")).toHaveValue("Expenses:Software");
+    expect(screen.getByText("AI suggestion: Expenses:Software")).toBeInTheDocument();
+    expect(screen.getByText("Matched software vendor.")).toBeInTheDocument();
+    expect(screen.getByText("Confidence: 91%")).toBeInTheDocument();
+  });
+
   it("shows a matched transfer and approves both linked Statement Rows", async () => {
     const user = userEvent.setup();
     const onApproveTransfer = vi.fn().mockResolvedValue(undefined);

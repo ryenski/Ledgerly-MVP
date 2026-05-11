@@ -50,6 +50,16 @@ export type SuggestedEntry = {
   linkedStatementRow?: LinkedStatementRow | null;
   suggestedLedgerAccount?: string | null;
   categorizationRuleId?: string | null;
+  aiSuggestion?: AiSuggestion | null;
+};
+
+export type AiSuggestion = {
+  ledgerAccount?: string | null;
+  payee?: string | null;
+  narration?: string | null;
+  confidence?: number | null;
+  explanation?: string | null;
+  needsHumanAttention: boolean;
 };
 
 export type LinkedStatementRow = {
@@ -98,6 +108,20 @@ export type CreateCategorizationRuleInput = {
 
 export type UpdateCategorizationRuleInput = CreateCategorizationRuleInput & {
   id: string;
+};
+
+export type AiAdapterConfig = {
+  command?: string | null;
+};
+
+export type ConfigureAiAdapterInput = {
+  workspaceRootPath: string;
+  command?: string | null;
+};
+
+export type AiContextDisclosure = {
+  adapterConfigured: boolean;
+  fieldsSent: string[];
 };
 
 export type WorkspaceManifest = {

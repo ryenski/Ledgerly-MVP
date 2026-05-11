@@ -1,10 +1,13 @@
 import type {
+  AiAdapterConfig,
+  AiContextDisclosure,
   CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
   SuggestedEntry,
   WorkspaceSummary,
 } from "../../lib/workspace/types";
+import { AiAdapterPanel } from "./AiAdapterPanel";
 import {
   CategorizationRulesPanel,
   type CategorizationRuleOffer,
@@ -20,6 +23,8 @@ type WorkspaceOverviewProps = {
   brokenProvenance?: BrokenProvenance[];
   categorizationRules?: CategorizationRule[];
   categorizationRuleOffer?: CategorizationRuleOffer | null;
+  aiAdapterConfig?: AiAdapterConfig;
+  aiContextDisclosure?: AiContextDisclosure;
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
@@ -47,6 +52,7 @@ type WorkspaceOverviewProps = {
     input: CategorizationRuleOffer & { id: string },
   ) => Promise<void> | void;
   onDismissCategorizationRuleOffer?: () => void;
+  onConfigureAiAdapter?: (command: string | null) => Promise<void> | void;
   error?: string | null;
 };
 
@@ -64,6 +70,8 @@ export function WorkspaceOverview({
   brokenProvenance = [],
   categorizationRules = [],
   categorizationRuleOffer = null,
+  aiAdapterConfig = { command: null },
+  aiContextDisclosure = { adapterConfigured: false, fieldsSent: [] },
   onReveal,
   onOpenAnother,
   onValidate,
@@ -74,6 +82,7 @@ export function WorkspaceOverview({
   onCreateCategorizationRule,
   onUpdateCategorizationRule,
   onDismissCategorizationRuleOffer,
+  onConfigureAiAdapter,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -175,6 +184,14 @@ export function WorkspaceOverview({
 
       {onImportStatementRows ? (
         <CsvImportSetup onImportStatementRows={onImportStatementRows} />
+      ) : null}
+
+      {onConfigureAiAdapter ? (
+        <AiAdapterPanel
+          config={aiAdapterConfig}
+          disclosure={aiContextDisclosure}
+          onConfigure={onConfigureAiAdapter}
+        />
       ) : null}
 
       {onApproveSuggestedEntry ? (
