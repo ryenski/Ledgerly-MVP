@@ -10,6 +10,7 @@ import {
   getAiAdapterConfig,
   getAiContextDisclosure,
   getBrokenProvenance,
+  getMvpReports,
   getSuggestedEntries,
   importStatementRows,
   listCategorizationRules,
@@ -25,6 +26,7 @@ import type {
   CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
+  MvpReports,
   SourceAccountKind,
   SuggestedEntry,
   WorkspaceCreateInput,
@@ -57,6 +59,7 @@ export default function App() {
     adapterConfigured: false,
     fieldsSent: [],
   });
+  const [reports, setReports] = useState<MvpReports | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(input: WorkspaceCreateInput) {
@@ -70,6 +73,7 @@ export default function App() {
       setRuleOffer(null);
       setAiAdapterConfig({ command: null });
       setAiContextDisclosure(await getAiContextDisclosure(created.rootPath));
+      setReports(null);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -87,6 +91,7 @@ export default function App() {
       setAiAdapterConfig(await getAiAdapterConfig(opened.rootPath));
       setAiContextDisclosure(await getAiContextDisclosure(opened.rootPath));
       setRuleOffer(null);
+      setReports(null);
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -114,6 +119,9 @@ export default function App() {
         ledgerValidation,
       });
       setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
+      if (ledgerValidation.status === "invalid") {
+        setReports(null);
+      }
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -135,6 +143,7 @@ export default function App() {
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
       setCategorizationRules(await listCategorizationRules(updated.rootPath));
+      setReports(null);
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -158,6 +167,7 @@ export default function App() {
       setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
       setCategorizationRules(await listCategorizationRules(workspace.rootPath));
       setAiContextDisclosure(await getAiContextDisclosure(workspace.rootPath));
+      setReports(null);
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -178,6 +188,7 @@ export default function App() {
       setSuggestedEntries(await getSuggestedEntries(updated.rootPath));
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
       setCategorizationRules(await listCategorizationRules(updated.rootPath));
+      setReports(null);
       const approvedEntry = suggestedEntries.find(
         (entry) => entry.statementRowId === input.statementRowId,
       );
@@ -209,6 +220,7 @@ export default function App() {
       setBrokenProvenance(await getBrokenProvenance(updated.rootPath));
       setCategorizationRules(await listCategorizationRules(updated.rootPath));
       setRuleOffer(null);
+      setReports(null);
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -258,6 +270,21 @@ export default function App() {
       setAiAdapterConfig(config);
       setAiContextDisclosure(await getAiContextDisclosure(workspace.rootPath));
       setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
+  async function handleLoadReports(input: { periodStart: string; periodEnd: string }) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      setReports(
+        await getMvpReports({
+          workspaceRootPath: workspace.rootPath,
+          ...input,
+        }),
+      );
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -323,6 +350,7 @@ export default function App() {
           categorizationRuleOffer={ruleOffer}
           aiAdapterConfig={aiAdapterConfig}
           aiContextDisclosure={aiContextDisclosure}
+          reports={reports}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}
@@ -333,6 +361,7 @@ export default function App() {
           onUpdateCategorizationRule={handleUpdateCategorizationRule}
           onDismissCategorizationRuleOffer={() => setRuleOffer(null)}
           onConfigureAiAdapter={handleConfigureAiAdapter}
+          onLoadReports={handleLoadReports}
           onOpenAnother={() => {
             setError(null);
             setView("open");

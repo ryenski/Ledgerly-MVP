@@ -4,6 +4,7 @@ import type {
   CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
+  MvpReports,
   SuggestedEntry,
   WorkspaceSummary,
 } from "../../lib/workspace/types";
@@ -13,6 +14,7 @@ import {
   type CategorizationRuleOffer,
 } from "./CategorizationRulesPanel";
 import { CsvImportSetup } from "./CsvImportSetup";
+import { MvpReportsPanel } from "./MvpReportsPanel";
 import { SourceAccountSetup } from "./SourceAccountSetup";
 import type { SourceAccountKind } from "../../lib/workspace/types";
 import { SuggestedEntryReview } from "./SuggestedEntryReview";
@@ -25,6 +27,7 @@ type WorkspaceOverviewProps = {
   categorizationRuleOffer?: CategorizationRuleOffer | null;
   aiAdapterConfig?: AiAdapterConfig;
   aiContextDisclosure?: AiContextDisclosure;
+  reports?: MvpReports | null;
   onReveal: () => void;
   onOpenAnother: () => void;
   onValidate?: () => void | Promise<void>;
@@ -53,6 +56,10 @@ type WorkspaceOverviewProps = {
   ) => Promise<void> | void;
   onDismissCategorizationRuleOffer?: () => void;
   onConfigureAiAdapter?: (command: string | null) => Promise<void> | void;
+  onLoadReports?: (input: {
+    periodStart: string;
+    periodEnd: string;
+  }) => Promise<void> | void;
   error?: string | null;
 };
 
@@ -72,6 +79,7 @@ export function WorkspaceOverview({
   categorizationRuleOffer = null,
   aiAdapterConfig = { command: null },
   aiContextDisclosure = { adapterConfigured: false, fieldsSent: [] },
+  reports = null,
   onReveal,
   onOpenAnother,
   onValidate,
@@ -83,6 +91,7 @@ export function WorkspaceOverview({
   onUpdateCategorizationRule,
   onDismissCategorizationRuleOffer,
   onConfigureAiAdapter,
+  onLoadReports,
   error,
 }: WorkspaceOverviewProps) {
   return (
@@ -211,6 +220,16 @@ export function WorkspaceOverview({
         onDismissOffer={onDismissCategorizationRuleOffer}
       />
 
+      {onLoadReports ? (
+        <MvpReportsPanel
+          ledgerStatus={workspace.ledgerStatus}
+          reports={reports}
+          defaultPeriodStart={workspace.booksStartDate}
+          defaultPeriodEnd={defaultReportEndDate(workspace.booksStartDate)}
+          onLoadReports={onLoadReports}
+        />
+      ) : null}
+
       <div className="action-row">
         <button className="primary-button" type="button" onClick={onReveal}>
           Reveal Workspace
@@ -226,4 +245,11 @@ export function WorkspaceOverview({
       </div>
     </section>
   );
+}
+
+function defaultReportEndDate(booksStartDate: string): string {
+  const [year, month] = booksStartDate.split("-");
+  if (!year || !month) return booksStartDate;
+  const end = new Date(Number(year), Number(month), 0);
+  return end.toISOString().slice(0, 10);
 }

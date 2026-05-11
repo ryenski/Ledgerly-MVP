@@ -7,6 +7,7 @@ pub mod errors;
 pub mod imports;
 pub mod open;
 pub mod paths;
+pub mod reports;
 pub mod source_accounts;
 pub mod types;
 pub mod validation;

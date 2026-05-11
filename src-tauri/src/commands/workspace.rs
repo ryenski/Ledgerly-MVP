@@ -10,6 +10,7 @@ use crate::workspace::categorization_rules::{
 use crate::workspace::create;
 use crate::workspace::imports::{self, CsvImportInput, CsvImportResult};
 use crate::workspace::open;
+use crate::workspace::reports::{self, MvpReports, ReportsInput};
 use crate::workspace::source_accounts::{self, AddSourceAccountInput};
 use crate::workspace::types::{CreateWorkspaceInput, LedgerValidationSummary, WorkspaceSummary};
 use crate::workspace::validation;
@@ -100,6 +101,11 @@ pub fn configure_ai_adapter(
 #[tauri::command]
 pub fn get_ai_context_disclosure(path: String) -> Result<AiContextDisclosure, WorkspaceError> {
     ai_adapter::get_ai_context_disclosure(path)
+}
+
+#[tauri::command]
+pub fn get_mvp_reports(input: ReportsInput) -> Result<MvpReports, WorkspaceError> {
+    reports::get_mvp_reports(input)
 }
 
 #[cfg(test)]

@@ -318,7 +318,8 @@ dd {
 .csv-import-setup,
 .ai-adapter,
 .suggested-entry-review,
-.categorization-rules {
+.categorization-rules,
+.mvp-reports {
   margin-top: 28px;
 }
 
@@ -412,6 +413,56 @@ dd {
   gap: 12px;
 }
 
+.report-period-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.reports-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.report-card {
+  border: 1px solid #dfddd5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.report-card h3 {
+  margin: 0 0 12px;
+}
+
+.report-rows {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.report-rows > div,
+.report-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.report-rows span:first-child,
+.report-total span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.report-total {
+  border-top: 1px solid #e8e5dc;
+  padding-top: 12px;
+  font-weight: 750;
+}
+
 @media (max-width: 760px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -433,7 +484,9 @@ dd {
 
   .directory-field,
   .detail-grid,
-  .mapping-grid {
+  .mapping-grid,
+  .report-period-form,
+  .reports-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -1,6 +1,6 @@
 # Ledgerly Architecture
 
-This document describes the current codebase architecture after the first App-Created Workspace lifecycle slice, the first Ledger Validation slice, and the local agent workflow skill used to work ready GitHub issues.
+This document describes the current codebase architecture after the App-Created Workspace lifecycle, Ledger Validation, Source Account setup, CSV Staging Area, Approval, Categorization Rules, BYO AI Adapter, Transfer Match, Broken Provenance, MVP Reports, and local agent workflow slices.
 
 ## Current System
 
@@ -21,6 +21,7 @@ flowchart TB
       AiAdapterPanel[src/features/workspace/AiAdapterPanel.tsx]
       SuggestedEntryReview[src/features/workspace/SuggestedEntryReview.tsx]
       CategorizationRulesPanel[src/features/workspace/CategorizationRulesPanel.tsx]
+      MvpReportsPanel[src/features/workspace/MvpReportsPanel.tsx]
       BrokenProvenanceUI[Broken Provenance UI]
     end
 
@@ -37,6 +38,7 @@ flowchart TB
       Approval[src-tauri/src/workspace/approval.rs]
       AiAdapter[src-tauri/src/workspace/ai_adapter.rs]
       CategorizationRules[src-tauri/src/workspace/categorization_rules.rs]
+      Reports[src-tauri/src/workspace/reports.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
       Types[src-tauri/src/workspace/types.rs]
@@ -73,6 +75,7 @@ flowchart TB
   WorkspaceScreens --> AiAdapterPanel
   WorkspaceScreens --> SuggestedEntryReview
   WorkspaceScreens --> CategorizationRulesPanel
+  WorkspaceScreens --> MvpReportsPanel
   WorkspaceScreens --> BrokenProvenanceUI
   WorkspaceApi --> Commands
   Commands --> Create
@@ -83,6 +86,7 @@ flowchart TB
   Commands --> Approval
   Commands --> AiAdapter
   Commands --> CategorizationRules
+  Commands --> Reports
   Create --> Beancount
   Create --> Paths
   Create --> Types
@@ -110,6 +114,7 @@ flowchart TB
   AiAdapterPanel --> WorkspaceApi
   SuggestedEntryReview --> WorkspaceApi
   CategorizationRulesPanel --> WorkspaceApi
+  MvpReportsPanel --> WorkspaceApi
   SourceAccounts --> AccountsBean
   SourceAccounts --> OpeningBalances
   CsvImports --> Sqlite
@@ -117,6 +122,10 @@ flowchart TB
   Approval --> Sqlite
   AiAdapter --> Sqlite
   BrokenProvenanceUI --> WorkspaceApi
+  Reports --> Validation
+  Reports --> MainBean
+  Reports --> OpeningBalances
+  Reports --> Transactions
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
 ```
@@ -229,6 +238,14 @@ sequenceDiagram
   Core->>Disk: scan accounted Statement Rows and Ledgerly Entry Metadata
   Core-->>UI: Broken Provenance rows without changing Ledger Validation status
 
+  User->>UI: Run MVP Reports for Period
+  UI->>API: getMvpReports(input)
+  API->>Cmd: invoke("get_mvp_reports")
+  Cmd->>Core: reports::get_mvp_reports(input)
+  Core->>Core: validation::validate_workspace(path)
+  Core->>Disk: read opening balances and included Monthly Transaction Files
+  Core-->>UI: Income Statement, Expense Breakdown, Source Balances, Balance Sheet
+
   User->>UI: Open Workspace
   UI->>API: openWorkspace(path)
   API->>Cmd: invoke("open_workspace")
@@ -249,7 +266,7 @@ flowchart LR
     MainBean[main.bean]
     AccountsBean[accounts.bean]
     OpeningBalances[opening-balances.bean]
-    FutureMonthly[transactions/*.bean future]
+    MonthlyTransactions[transactions/*.bean]
   end
 
   subgraph LedgerlyManaged[Ledgerly-Managed Local Data]
@@ -272,6 +289,7 @@ flowchart LR
   end
 
   SourceOfTruth --> Validation[Structural Ledger Validation]
+  SourceOfTruth --> Reports[MVP Reports]
   LedgerlyManaged --> OpenWorkspace[Open App-Created Workspace]
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
@@ -280,8 +298,8 @@ flowchart LR
   StatementRows --> SuggestedEntries[Standard Suggested Entries]
   StatementRows --> TransferMatches[User-approved Transfer Matches]
   StatementRows --> ProvenanceCheck[Broken Provenance Check]
-  TransferMatches --> FutureMonthly
-  ProvenanceCheck --> FutureMonthly
+  TransferMatches --> MonthlyTransactions
+  ProvenanceCheck --> MonthlyTransactions
 ```
 
 ## Agent Issue Workflow
@@ -325,6 +343,7 @@ sequenceDiagram
 - One-sided transfer hints can appear when a Statement Row description looks like a transfer or payment, but they do not claim another row or write an approval without a linked match.
 - Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
 - Broken Provenance is surfaced separately from structural Ledger Validation by scanning accounted Statement Rows against Ledgerly Entry Metadata in the readable ledger files.
+- MVP Reports are derived from the readable Beancount ledger files, not from unapproved SQLite Staging Area rows. Reports currently parse Ledgerly-written opening balances and included Monthly Transaction Files to render Income Statement, Expense Breakdown, Source Account Balances, and a basic Balance Sheet.
 - `src/lib/workspace/api.ts` is the frontend boundary to native Workspace commands.
 - Tauri commands translate frontend calls into Rust domain operations.
 - `src-tauri/src/workspace/` owns Workspace filesystem layout, manifest handling, Beancount rendering, SQLite initialization, path validation, Source Account ledger writes, CSV import staging, Source Mapping persistence, and structural ledger validation with file-aware error messages.
@@ -342,6 +361,7 @@ sequenceDiagram
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
 - Approved transfers write one transaction between the two Source Accounts and mark both linked Statement Rows accounted with the same Ledgerly entry id and ledger file path.
+- MVP Reports are blocked during Invalid Ledger State and cover Ledgerly-written `.bean` syntax for the MVP reporting surface rather than arbitrary Beancount.
 - Raw CSV row details, AI explanations, and confidence scores remain in Ledgerly-managed local data or transient review state and are not written as Beancount metadata.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

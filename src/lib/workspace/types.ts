@@ -124,6 +124,44 @@ export type AiContextDisclosure = {
   fieldsSent: string[];
 };
 
+export type ReportsInput = {
+  workspaceRootPath: string;
+  periodStart: string;
+  periodEnd: string;
+};
+
+export type AccountAmount = {
+  account: string;
+  amount: number;
+};
+
+export type IncomeStatementReport = {
+  income: AccountAmount[];
+  expenses: AccountAmount[];
+  totalIncome: number;
+  totalExpenses: number;
+  netIncome: number;
+};
+
+export type BalanceSheetReport = {
+  assets: AccountAmount[];
+  liabilities: AccountAmount[];
+  equity: AccountAmount[];
+  retainedEarnings: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+};
+
+export type MvpReports = {
+  periodStart: string;
+  periodEnd: string;
+  incomeStatement: IncomeStatementReport;
+  expenseBreakdown: AccountAmount[];
+  sourceAccountBalances: AccountAmount[];
+  balanceSheet: BalanceSheetReport;
+};
+
 export type WorkspaceManifest = {
   schemaVersion: 1;
   appCreated: true;
