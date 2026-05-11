@@ -4,8 +4,11 @@ import {
   addSourceAccount,
   approveTransferEntry,
   approveSuggestedEntry,
+  configureAiAdapter,
   createCategorizationRule,
   createWorkspace,
+  getAiAdapterConfig,
+  getAiContextDisclosure,
   getBrokenProvenance,
   getSuggestedEntries,
   importStatementRows,
@@ -17,6 +20,8 @@ import {
   validateWorkspace,
 } from "./lib/workspace/api";
 import type {
+  AiAdapterConfig,
+  AiContextDisclosure,
   CategorizationRule,
   CsvSourceMappingInput,
   BrokenProvenance,
@@ -47,6 +52,11 @@ export default function App() {
   const [brokenProvenance, setBrokenProvenance] = useState<BrokenProvenance[]>([]);
   const [categorizationRules, setCategorizationRules] = useState<CategorizationRule[]>([]);
   const [ruleOffer, setRuleOffer] = useState<CategorizationRuleOffer | null>(null);
+  const [aiAdapterConfig, setAiAdapterConfig] = useState<AiAdapterConfig>({ command: null });
+  const [aiContextDisclosure, setAiContextDisclosure] = useState<AiContextDisclosure>({
+    adapterConfigured: false,
+    fieldsSent: [],
+  });
   const [error, setError] = useState<string | null>(null);
 
   async function handleCreate(input: WorkspaceCreateInput) {
@@ -58,6 +68,8 @@ export default function App() {
       setBrokenProvenance([]);
       setCategorizationRules([]);
       setRuleOffer(null);
+      setAiAdapterConfig({ command: null });
+      setAiContextDisclosure(await getAiContextDisclosure(created.rootPath));
       setView("overview");
     } catch (caught) {
       setError(userFacingError(caught));
@@ -72,6 +84,8 @@ export default function App() {
       setSuggestedEntries(await getSuggestedEntries(opened.rootPath));
       setBrokenProvenance(await getBrokenProvenance(opened.rootPath));
       setCategorizationRules(await listCategorizationRules(opened.rootPath));
+      setAiAdapterConfig(await getAiAdapterConfig(opened.rootPath));
+      setAiContextDisclosure(await getAiContextDisclosure(opened.rootPath));
       setRuleOffer(null);
       setView("overview");
     } catch (caught) {
@@ -143,6 +157,7 @@ export default function App() {
       setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
       setBrokenProvenance(await getBrokenProvenance(workspace.rootPath));
       setCategorizationRules(await listCategorizationRules(workspace.rootPath));
+      setAiContextDisclosure(await getAiContextDisclosure(workspace.rootPath));
     } catch (caught) {
       setError(userFacingError(caught));
     }
@@ -232,6 +247,22 @@ export default function App() {
     }
   }
 
+  async function handleConfigureAiAdapter(command: string | null) {
+    if (!workspace) return;
+    setError(null);
+    try {
+      const config = await configureAiAdapter({
+        workspaceRootPath: workspace.rootPath,
+        command,
+      });
+      setAiAdapterConfig(config);
+      setAiContextDisclosure(await getAiContextDisclosure(workspace.rootPath));
+      setSuggestedEntries(await getSuggestedEntries(workspace.rootPath));
+    } catch (caught) {
+      setError(userFacingError(caught));
+    }
+  }
+
   useEffect(() => {
     if (view !== "overview" || !workspace) return;
 
@@ -290,6 +321,8 @@ export default function App() {
           brokenProvenance={brokenProvenance}
           categorizationRules={categorizationRules}
           categorizationRuleOffer={ruleOffer}
+          aiAdapterConfig={aiAdapterConfig}
+          aiContextDisclosure={aiContextDisclosure}
           onReveal={handleReveal}
           onValidate={handleValidateWorkspace}
           onAddSourceAccount={handleAddSourceAccount}
@@ -299,6 +332,7 @@ export default function App() {
           onCreateCategorizationRule={handleCreateCategorizationRule}
           onUpdateCategorizationRule={handleUpdateCategorizationRule}
           onDismissCategorizationRuleOffer={() => setRuleOffer(null)}
+          onConfigureAiAdapter={handleConfigureAiAdapter}
           onOpenAnother={() => {
             setError(null);
             setView("open");

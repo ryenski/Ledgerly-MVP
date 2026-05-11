@@ -1,3 +1,4 @@
+pub mod ai_adapter;
 pub mod approval;
 pub mod beancount;
 pub mod categorization_rules;

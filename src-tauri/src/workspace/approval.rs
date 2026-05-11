@@ -1,3 +1,4 @@
+use crate::workspace::ai_adapter::{suggestion_for_row, AiSuggestion, AiSuggestionRow};
 use crate::workspace::categorization_rules::matching_rule_for_row;
 use crate::workspace::errors::{WorkspaceError, WorkspaceErrorCode};
 use crate::workspace::imports::ensure_import_tables;
@@ -30,7 +31,7 @@ pub struct LinkedStatementRow {
     pub import_fingerprint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SuggestedEntry {
     pub kind: SuggestedEntryKind,
@@ -44,6 +45,7 @@ pub struct SuggestedEntry {
     pub linked_statement_row: Option<LinkedStatementRow>,
     pub suggested_ledger_account: Option<String>,
     pub categorization_rule_id: Option<String>,
+    pub ai_suggestion: Option<AiSuggestion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -73,16 +75,12 @@ pub struct BrokenProvenance {
 pub fn get_suggested_entries(
     workspace_root_path: impl AsRef<Path>,
 ) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
-    let connection = Connection::open(
-        workspace_root_path
-            .as_ref()
-            .join(".ledgerly")
-            .join("ledgerly.sqlite"),
-    )?;
+    let root = workspace_root_path.as_ref();
+    let connection = Connection::open(root.join(".ledgerly").join("ledgerly.sqlite"))?;
     ensure_import_tables(&connection)?;
     ensure_provenance_columns(&connection)?;
     let pending_rows = load_pending_statement_rows(&connection)?;
-    build_suggested_entries(&connection, pending_rows)
+    build_suggested_entries(root, &connection, pending_rows)
 }
 
 pub fn get_broken_provenance(
@@ -261,6 +259,7 @@ fn load_pending_statement_rows(
                 linked_statement_row: None,
                 suggested_ledger_account: None,
                 categorization_rule_id: None,
+                ai_suggestion: None,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -268,6 +267,7 @@ fn load_pending_statement_rows(
 }
 
 fn build_suggested_entries(
+    root: &Path,
     connection: &Connection,
     rows: Vec<SuggestedEntry>,
 ) -> Result<Vec<SuggestedEntry>, WorkspaceError> {
@@ -293,7 +293,7 @@ fn build_suggested_entries(
             let mut transfer = row.clone();
             transfer.kind = SuggestedEntryKind::Transfer;
             transfer.linked_statement_row = Some(linked_statement_row(linked));
-            suggestions.push(apply_categorization_rule(connection, transfer)?);
+            suggestions.push(apply_suggestion_layers(root, connection, transfer)?);
             continue;
         }
 
@@ -301,20 +301,21 @@ fn build_suggested_entries(
             let mut transfer = row.clone();
             transfer.kind = SuggestedEntryKind::Transfer;
             consumed[index] = true;
-            suggestions.push(apply_categorization_rule(connection, transfer)?);
+            suggestions.push(apply_suggestion_layers(root, connection, transfer)?);
             continue;
         }
     }
 
     for (index, row) in rows.into_iter().enumerate() {
         if !consumed[index] {
-            suggestions.push(apply_categorization_rule(connection, row)?);
+            suggestions.push(apply_suggestion_layers(root, connection, row)?);
         }
     }
     Ok(suggestions)
 }
 
-fn apply_categorization_rule(
+fn apply_suggestion_layers(
+    root: &Path,
     connection: &Connection,
     mut entry: SuggestedEntry,
 ) -> Result<SuggestedEntry, WorkspaceError> {
@@ -324,6 +325,12 @@ fn apply_categorization_rule(
         {
             entry.suggested_ledger_account = Some(rule.ledger_account);
             entry.categorization_rule_id = Some(rule.id);
+        }
+        if entry.suggested_ledger_account.is_none() {
+            if let Some(ai_suggestion) = suggestion_for_row(root, connection, &entry)? {
+                entry.suggested_ledger_account = ai_suggestion.ledger_account.clone();
+                entry.ai_suggestion = Some(ai_suggestion);
+            }
         }
     }
     Ok(entry)
@@ -366,6 +373,7 @@ fn load_pending_suggested_entry(
                     linked_statement_row: None,
                     suggested_ledger_account: None,
                     categorization_rule_id: None,
+                    ai_suggestion: None,
                 })
             },
         )
@@ -389,6 +397,32 @@ fn ensure_ledger_account_exists(root: &Path, ledger_account: &str) -> Result<(),
         WorkspaceErrorCode::InvalidLedger,
         "Approval requires an existing Ledger Account.",
     ))
+}
+
+impl AiSuggestionRow for SuggestedEntry {
+    fn posted_date(&self) -> &str {
+        &self.posted_date
+    }
+
+    fn description(&self) -> &str {
+        &self.description
+    }
+
+    fn source_account(&self) -> &str {
+        &self.source_account
+    }
+
+    fn source_amount(&self) -> &str {
+        &self.source_amount
+    }
+
+    fn source_file_name(&self) -> &str {
+        &self.source_file_name
+    }
+
+    fn import_fingerprint(&self) -> &str {
+        &self.import_fingerprint
+    }
 }
 
 fn parse_amount(value: &str) -> Result<f64, WorkspaceError> {
@@ -611,6 +645,7 @@ fn ledger_entry_block<'a>(contents: &'a str, ledgerly_entry_id: &str) -> Option<
 
 #[cfg(test)]
 mod tests {
+    use crate::workspace::ai_adapter::{configure_ai_adapter, ConfigureAiAdapterInput};
     use crate::workspace::approval::{
         approve_suggested_entry, approve_transfer_entry, get_broken_provenance,
         get_suggested_entries, ApproveSuggestedEntryInput, ApproveTransferEntryInput,
@@ -914,6 +949,74 @@ mod tests {
         assert_eq!(
             suggested_entries[0].categorization_rule_id.as_deref(),
             Some(rule.id.as_str())
+        );
+    }
+
+    #[test]
+    fn applies_configured_ai_adapter_suggestions_to_future_suggested_entries() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+        let adapter_path = tempdir.path().join("adapter.sh");
+        fs::write(
+            &adapter_path,
+            "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"ledgerAccount\":\"Expenses:Software\",\"payee\":\"Vendor\",\"narration\":\"Software\",\"confidence\":0.91,\"explanation\":\"Matched software vendor.\",\"needsHumanAttention\":false}'\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut permissions = fs::metadata(&adapter_path).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&adapter_path, permissions).unwrap();
+        }
+        configure_ai_adapter(ConfigureAiAdapterInput {
+            workspace_root_path: created.root_path.clone(),
+            command: Some(adapter_path.to_string_lossy().to_string()),
+        })
+        .unwrap();
+        import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Amount\n2026-01-04,Software renewal,-29.99\n"
+                .to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: "Amount".to_string(),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+
+        let suggested_entries = get_suggested_entries(&created.root_path).unwrap();
+
+        assert_eq!(
+            suggested_entries[0].suggested_ledger_account.as_deref(),
+            Some("Expenses:Software")
+        );
+        assert_eq!(
+            suggested_entries[0]
+                .ai_suggestion
+                .as_ref()
+                .and_then(|suggestion| suggestion.explanation.as_deref()),
+            Some("Matched software vendor.")
         );
     }
 

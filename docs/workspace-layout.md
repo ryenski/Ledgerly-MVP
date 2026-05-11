@@ -48,12 +48,15 @@ The CSV Import slice creates durable local Staging Area tables:
 - `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
 - `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, pending/accounted status, and the approved Ledgerly entry id/file when accounted.
 - `categorization_rules` stores Founder-Operator confirmed description match text, Source Account scope, and target Ledger Account for deterministic future Suggested Entries.
+- `ai_adapter_config` stores the optional local BYO AI Adapter command. When no command is configured, the core import-review-approval loop works without AI.
 
 Each imported Statement Row gets an Import Fingerprint derived from normalized row identity within the Source Account. Re-importing the same CSV or an overlapping CSV skips rows where `(source_account, import_fingerprint)` already exists. Accounted Statement Rows remain in the Staging Area so future imports can still deduplicate against them.
 
 Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
 
 Confirmed Categorization Rules do not write to Beancount directly. They prefill future Standard Suggested Entries when a pending Statement Row belongs to the same Source Account and its description contains the rule match text. Ledgerly can offer to create a rule after Approval, but the Founder-Operator must confirm creation.
+
+When a BYO AI Adapter is configured, Ledgerly sends Curated Ledger Context to the local adapter over stdin and reads one structured AI Suggestion from stdout. Context includes the Statement Row, Source Account, chart of accounts, Categorization Rules, similar approved entries, and business profile. The adapter does not need direct Workspace file access. AI Suggestions can prefill review fields and show confidence or explanations, but Approval remains required before any Beancount write.
 
 ## Monthly Transaction Files
 
@@ -72,7 +75,7 @@ Ledgerly-written entries include minimal Beancount metadata:
 - `source_account`
 - `source_file_name`
 
-Raw CSV row JSON, future AI explanations, and confidence scores stay in Ledgerly-managed local data rather than being copied into the ledger.
+Raw CSV row JSON, AI explanations, and confidence scores stay in Ledgerly-managed local data or transient review state rather than being copied into the ledger.
 
 Approval is blocked while Ledger Validation reports Invalid Ledger State. Broken Provenance is separate: if a Manual Ledger Edit removes or changes Ledgerly Entry Metadata while the Beancount files still validate, Ledgerly surfaces Broken Provenance without marking the ledger invalid.
 

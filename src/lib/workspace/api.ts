@@ -3,10 +3,13 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath } from "@tauri-apps/plugin-opener";
 import type {
   AddSourceAccountInput,
+  AiAdapterConfig,
+  AiContextDisclosure,
   ApproveSuggestedEntryInput,
   ApproveTransferEntryInput,
   BrokenProvenance,
   CategorizationRule,
+  ConfigureAiAdapterInput,
   CreateCategorizationRuleInput,
   CsvImportInput,
   CsvImportResult,
@@ -34,6 +37,9 @@ type WorkspaceApi = {
   updateCategorizationRule: (
     input: UpdateCategorizationRuleInput,
   ) => Promise<CategorizationRule>;
+  getAiAdapterConfig: (path: string) => Promise<AiAdapterConfig>;
+  configureAiAdapter: (input: ConfigureAiAdapterInput) => Promise<AiAdapterConfig>;
+  getAiContextDisclosure: (path: string) => Promise<AiContextDisclosure>;
   pickDirectory: () => Promise<string | null>;
   revealWorkspace: (path: string) => Promise<void>;
 };
@@ -146,6 +152,31 @@ export async function updateCategorizationRule(
     return window.__LEDGERLY_TEST_API__.updateCategorizationRule(input);
   }
   return invoke<CategorizationRule>("update_categorization_rule", { input });
+}
+
+export async function getAiAdapterConfig(path: string): Promise<AiAdapterConfig> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.getAiAdapterConfig(path);
+  }
+  return invoke<AiAdapterConfig>("get_ai_adapter_config", { path });
+}
+
+export async function configureAiAdapter(
+  input: ConfigureAiAdapterInput,
+): Promise<AiAdapterConfig> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.configureAiAdapter(input);
+  }
+  return invoke<AiAdapterConfig>("configure_ai_adapter", { input });
+}
+
+export async function getAiContextDisclosure(
+  path: string,
+): Promise<AiContextDisclosure> {
+  if (window.__LEDGERLY_TEST_API__) {
+    return window.__LEDGERLY_TEST_API__.getAiContextDisclosure(path);
+  }
+  return invoke<AiContextDisclosure>("get_ai_context_disclosure", { path });
 }
 
 export async function pickDirectory(): Promise<string | null> {

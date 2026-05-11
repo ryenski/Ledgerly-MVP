@@ -115,8 +115,20 @@ function SuggestedEntryCard({
         <p>{entry.postedDate}</p>
         {entry.suggestedLedgerAccount ? (
           <p className="rule-suggestion">
-            Rule suggestion: {entry.suggestedLedgerAccount}
+            {entry.aiSuggestion ? "AI suggestion" : "Rule suggestion"}:{" "}
+            {entry.suggestedLedgerAccount}
           </p>
+        ) : null}
+        {entry.aiSuggestion ? (
+          <div className="ai-suggestion">
+            <p>{entry.aiSuggestion.explanation || "Adapter returned a suggestion."}</p>
+            {typeof entry.aiSuggestion.confidence === "number" ? (
+              <p>Confidence: {Math.round(entry.aiSuggestion.confidence * 100)}%</p>
+            ) : null}
+            {entry.aiSuggestion.needsHumanAttention ? (
+              <p>Needs human attention</p>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

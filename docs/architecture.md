@@ -18,6 +18,7 @@ flowchart TB
       InvalidLedgerUI[Invalid Ledger State UI]
       SourceAccountSetup[src/features/workspace/SourceAccountSetup.tsx]
       CsvImportSetup[src/features/workspace/CsvImportSetup.tsx]
+      AiAdapterPanel[src/features/workspace/AiAdapterPanel.tsx]
       SuggestedEntryReview[src/features/workspace/SuggestedEntryReview.tsx]
       CategorizationRulesPanel[src/features/workspace/CategorizationRulesPanel.tsx]
       BrokenProvenanceUI[Broken Provenance UI]
@@ -34,6 +35,7 @@ flowchart TB
       SourceAccounts[src-tauri/src/workspace/source_accounts.rs]
       CsvImports[src-tauri/src/workspace/imports.rs]
       Approval[src-tauri/src/workspace/approval.rs]
+      AiAdapter[src-tauri/src/workspace/ai_adapter.rs]
       CategorizationRules[src-tauri/src/workspace/categorization_rules.rs]
       Beancount[src-tauri/src/workspace/beancount.rs]
       Paths[src-tauri/src/workspace/paths.rs]
@@ -68,6 +70,7 @@ flowchart TB
   WorkspaceScreens --> InvalidLedgerUI
   WorkspaceScreens --> SourceAccountSetup
   WorkspaceScreens --> CsvImportSetup
+  WorkspaceScreens --> AiAdapterPanel
   WorkspaceScreens --> SuggestedEntryReview
   WorkspaceScreens --> CategorizationRulesPanel
   WorkspaceScreens --> BrokenProvenanceUI
@@ -78,6 +81,7 @@ flowchart TB
   Commands --> SourceAccounts
   Commands --> CsvImports
   Commands --> Approval
+  Commands --> AiAdapter
   Commands --> CategorizationRules
   Create --> Beancount
   Create --> Paths
@@ -90,6 +94,7 @@ flowchart TB
   Approval --> Validation
   Approval --> Open
   Approval --> Sqlite
+  Approval --> AiAdapter
   Approval --> CategorizationRules
   Open --> Types
   Open --> Errors
@@ -102,6 +107,7 @@ flowchart TB
   InvalidLedgerUI --> WorkspaceApi
   SourceAccountSetup --> WorkspaceApi
   CsvImportSetup --> WorkspaceApi
+  AiAdapterPanel --> WorkspaceApi
   SuggestedEntryReview --> WorkspaceApi
   CategorizationRulesPanel --> WorkspaceApi
   SourceAccounts --> AccountsBean
@@ -109,6 +115,7 @@ flowchart TB
   CsvImports --> Sqlite
   Approval --> Transactions
   Approval --> Sqlite
+  AiAdapter --> Sqlite
   BrokenProvenanceUI --> WorkspaceApi
   WorkReadySkill --> GitHubIssues
   WorkReadySkill --> GitHubPRs
@@ -176,7 +183,8 @@ sequenceDiagram
   API->>Cmd: invoke("get_suggested_entries")
   Cmd->>Core: approval::get_suggested_entries(path)
   Core->>Disk: apply matching Categorization Rules from SQLite
-  Core-->>UI: Standard Suggested Entries, rule suggestions, and explicit Transfer Matches
+  Core->>Core: invoke configured BYO AI Adapter with Curated Ledger Context
+  Core-->>UI: Standard Suggested Entries, rule/AI suggestions, and explicit Transfer Matches
   User->>UI: Approve Entry
   UI->>API: approveSuggestedEntry(input)
   API->>Cmd: invoke("approve_suggested_entry")
@@ -195,6 +203,16 @@ sequenceDiagram
   Cmd->>Core: categorization_rules::create_categorization_rule(input)
   Core->>Disk: persist source-scoped rule in SQLite
   Core-->>UI: Confirmed Categorization Rule
+
+  User->>UI: Configure BYO AI Adapter
+  UI->>API: configureAiAdapter(input)
+  API->>Cmd: invoke("configure_ai_adapter")
+  Cmd->>Core: ai_adapter::configure_ai_adapter(input)
+  Core->>Disk: persist optional local adapter command in SQLite
+  UI->>API: getAiContextDisclosure(path)
+  API->>Cmd: invoke("get_ai_context_disclosure")
+  Cmd->>Core: ai_adapter::get_ai_context_disclosure(path)
+  Core-->>UI: AI Context Disclosure fields
 
   User->>UI: Approve Transfer
   UI->>API: approveTransferEntry(input)
@@ -246,6 +264,7 @@ flowchart LR
     SourceMappings[source_mappings]
     StatementRows[statement_rows with import_fingerprint and ledgerly_entry_id]
     CategorizationRulesTable[categorization_rules]
+    AiAdapterConfig[ai_adapter_config]
     StagingPlaceholder[staging_area_placeholder]
     MappingPlaceholder[source_mappings_placeholder]
     RulesPlaceholder[categorization_rules_placeholder]
@@ -257,6 +276,7 @@ flowchart LR
   Sqlite --> CurrentSqlite
   SourceMappings --> StatementRows
   CategorizationRulesTable --> SuggestedEntries
+  AiAdapterConfig --> SuggestedEntries
   StatementRows --> SuggestedEntries[Standard Suggested Entries]
   StatementRows --> TransferMatches[User-approved Transfer Matches]
   StatementRows --> ProvenanceCheck[Broken Provenance Check]
@@ -298,6 +318,9 @@ sequenceDiagram
 - Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
 - Categorization Rules are user-confirmed SQLite records scoped to Source Account by default, visible/editable in the Workspace overview, and used to prefill future Standard Suggested Entries before any future AI suggestion layer.
 - Approval can offer a Categorization Rule after a non-transfer entry is approved, but the rule is not created until the Founder-Operator confirms it.
+- BYO AI Adapter configuration is optional SQLite state. When configured, Ledgerly sends Curated Ledger Context over stdin to the local adapter command and reads a structured AI Suggestion from stdout.
+- Curated Ledger Context includes the Statement Row, Source Account, chart of accounts, Categorization Rules, similar approved entries, and business profile. It does not grant direct Workspace file access to the adapter.
+- AI Suggestions can prefill review fields and expose confidence/explanation, but they never write to Beancount; Approval remains required.
 - Transfer Matches are suggested from opposite-signed same-date Statement Rows across different Source Accounts, never auto-approved, and approved as one balanced Beancount Transfer Entry that marks both linked Statement Rows accounted.
 - One-sided transfer hints can appear when a Statement Row description looks like a transfer or payment, but they do not claim another row or write an approval without a linked match.
 - Approval retains each source Statement Row as accounted in the Staging Area, stores the Ledgerly entry id and ledger file path in SQLite, and writes minimal Beancount metadata for `ledgerly_entry_id`, `import_fingerprint`, `source_account`, and `source_file_name`.
@@ -319,6 +342,6 @@ sequenceDiagram
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
 - Approved transfers write one transaction between the two Source Accounts and mark both linked Statement Rows accounted with the same Ledgerly entry id and ledger file path.
-- Raw CSV row details, AI explanations, and confidence scores remain in Ledgerly-managed local data and are not written as Beancount metadata.
+- Raw CSV row details, AI explanations, and confidence scores remain in Ledgerly-managed local data or transient review state and are not written as Beancount metadata.
 - Tauri npm packages and Rust crates are pinned to the same `2.0.x` minor line to avoid dev-time version mismatch errors.
 - Native Tauri dialog/opener plugin integration remains a future compatibility task.

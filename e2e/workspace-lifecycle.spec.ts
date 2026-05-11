@@ -69,6 +69,18 @@ test("creates and reopens a Workspace through the app shell", async ({ page }) =
           updatedAt: "2026-01-01T00:00:00Z",
         };
       },
+      async getAiAdapterConfig() {
+        return { command: null };
+      },
+      async configureAiAdapter() {
+        return { command: "/tmp/adapter" };
+      },
+      async getAiContextDisclosure() {
+        return {
+          adapterConfigured: false,
+          fieldsSent: ["Statement Row", "Chart of Accounts"],
+        };
+      },
       async pickDirectory() {
         return "/tmp";
       },
