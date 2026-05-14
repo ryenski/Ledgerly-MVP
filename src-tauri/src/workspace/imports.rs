@@ -24,7 +24,9 @@ pub struct CsvImportInput {
 pub struct CsvSourceMappingInput {
     pub posted_date_column: String,
     pub description_column: String,
-    pub amount_column: String,
+    pub amount_column: Option<String>,
+    pub debit_column: Option<String>,
+    pub credit_column: Option<String>,
     pub memo_column: Option<String>,
     pub reference_id_column: Option<String>,
     pub payee_column: Option<String>,
@@ -71,7 +73,7 @@ pub fn import_statement_rows(input: CsvImportInput) -> Result<CsvImportResult, W
     for row in rows {
         let posted_date = required_value(&row, &mapping.posted_date_column)?;
         let description = required_value(&row, &mapping.description_column)?;
-        let source_amount = required_amount(&row, &mapping.amount_column)?;
+        let source_amount = required_source_amount(&row, &mapping)?;
         let import_fingerprint = import_fingerprint(
             &input.source_account,
             &posted_date,
@@ -287,6 +289,43 @@ fn required_value(row: &HashMap<String, String>, column: &str) -> Result<String,
         })
 }
 
+fn required_source_amount(
+    row: &HashMap<String, String>,
+    mapping: &CsvSourceMappingInput,
+) -> Result<String, WorkspaceError> {
+    if let Some(amount_column) = mapping.amount_column.as_deref() {
+        return required_amount(row, amount_column);
+    }
+
+    let debit_column = mapping.debit_column.as_deref().ok_or_else(|| {
+        WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            "CSV Import needs either an amount column or debit and credit columns.",
+        )
+    })?;
+    let credit_column = mapping.credit_column.as_deref().ok_or_else(|| {
+        WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            "CSV Import needs either an amount column or debit and credit columns.",
+        )
+    })?;
+
+    let debit = optional_amount(row, debit_column)?;
+    let credit = optional_amount(row, credit_column)?;
+    match (debit, credit) {
+        (Some(_), Some(_)) => Err(WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            "CSV Import debit and credit columns cannot both contain values for one Statement Row.",
+        )),
+        (Some(amount), None) => Ok(format_source_amount(-amount)),
+        (None, Some(amount)) => Ok(format_source_amount(amount)),
+        (None, None) => Err(WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            "CSV Import needs either a debit or credit value for each Statement Row.",
+        )),
+    }
+}
+
 fn required_amount(row: &HashMap<String, String>, column: &str) -> Result<String, WorkspaceError> {
     let amount = required_value(row, column)?;
     amount.parse::<f64>().map_err(|_| {
@@ -296,6 +335,28 @@ fn required_amount(row: &HashMap<String, String>, column: &str) -> Result<String
         )
     })?;
     Ok(amount)
+}
+
+fn optional_amount(
+    row: &HashMap<String, String>,
+    column: &str,
+) -> Result<Option<f64>, WorkspaceError> {
+    let Some(value) = row.get(column).map(|value| value.trim()) else {
+        return Ok(None);
+    };
+    if value.is_empty() {
+        return Ok(None);
+    }
+    value.parse::<f64>().map(Some).map_err(|_| {
+        WorkspaceError::new(
+            WorkspaceErrorCode::InvalidLedger,
+            format!("CSV Import amount column {column} must contain numeric values."),
+        )
+    })
+}
+
+fn format_source_amount(amount: f64) -> String {
+    format!("{amount:.2}")
 }
 
 fn optional_value(row: &HashMap<String, String>, column: Option<&str>) -> Option<String> {
@@ -357,7 +418,9 @@ mod tests {
             mapping: Some(CsvSourceMappingInput {
                 posted_date_column: "Date".to_string(),
                 description_column: "Description".to_string(),
-                amount_column: "Amount".to_string(),
+                amount_column: Some("Amount".to_string()),
+                debit_column: None,
+                credit_column: None,
                 memo_column: Some("Memo".to_string()),
                 reference_id_column: None,
                 payee_column: None,
@@ -433,7 +496,9 @@ mod tests {
             mapping: Some(CsvSourceMappingInput {
                 posted_date_column: "Date".to_string(),
                 description_column: "Description".to_string(),
-                amount_column: "Amount".to_string(),
+                amount_column: Some("Amount".to_string()),
+                debit_column: None,
+                credit_column: None,
                 memo_column: None,
                 reference_id_column: None,
                 payee_column: None,
@@ -479,5 +544,69 @@ mod tests {
         .unwrap();
         assert_eq!(third.imported_count, 1);
         assert_eq!(third.skipped_duplicate_count, 1);
+    }
+
+    #[test]
+    fn imports_debit_credit_statement_rows_as_source_amounts() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let created = create_workspace(CreateWorkspaceInput {
+            business_name: "Acme Studio".to_string(),
+            base_currency: "USD".to_string(),
+            books_start_date: "2026-01-01".to_string(),
+            parent_directory: tempdir.path().to_string_lossy().to_string(),
+        })
+        .unwrap();
+        add_source_account(AddSourceAccountInput {
+            workspace_root_path: created.root_path.clone(),
+            kind: SourceAccountKind::Bank,
+            name: "Operating Checking".to_string(),
+            opening_balance: None,
+        })
+        .unwrap();
+
+        let result = import_statement_rows(CsvImportInput {
+            workspace_root_path: created.root_path.clone(),
+            source_account: "Assets:Bank:Operating-Checking".to_string(),
+            source_file_name: "checking.csv".to_string(),
+            csv_contents: "Date,Description,Debit,Credit\n2026-01-03,Client payment,,1500.00\n2026-01-04,Software,29.99,\n".to_string(),
+            mapping: Some(CsvSourceMappingInput {
+                posted_date_column: "Date".to_string(),
+                description_column: "Description".to_string(),
+                amount_column: None,
+                debit_column: Some("Debit".to_string()),
+                credit_column: Some("Credit".to_string()),
+                memo_column: None,
+                reference_id_column: None,
+                payee_column: None,
+                category_column: None,
+            }),
+        })
+        .unwrap();
+
+        assert_eq!(result.imported_count, 2);
+
+        let connection = Connection::open(
+            std::path::Path::new(&created.root_path)
+                .join(".ledgerly")
+                .join("ledgerly.sqlite"),
+        )
+        .unwrap();
+        let payment_amount: String = connection
+            .query_row(
+                "select source_amount from statement_rows where description = 'Client payment'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(payment_amount, "1500.00");
+
+        let software_amount: String = connection
+            .query_row(
+                "select source_amount from statement_rows where description = 'Software'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(software_amount, "-29.99");
     }
 }

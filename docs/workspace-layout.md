@@ -45,12 +45,14 @@ SQLite does not replace the ledger. It exists so later slices can add staging, s
 
 The CSV Import slice creates durable local Staging Area tables:
 
-- `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account.
+- `source_mappings` stores the CSV column mapping per Source Account and can reuse it on later imports for that Source Account. A mapping may use either one signed amount column or statement debit/credit columns.
 - `statement_rows` stores normalized Statement Rows tied to one Source Account, including posted date, description, Source Amount, Import Fingerprint, optional supporting fields, raw row JSON, source file name, pending/accounted status, and the approved Ledgerly entry id/file when accounted.
 - `categorization_rules` stores Founder-Operator confirmed description match text, Source Account scope, and target Ledger Account for deterministic future Suggested Entries.
 - `ai_adapter_config` stores the optional local BYO AI Adapter command. When no command is configured, the core import-review-approval loop works without AI.
 
 Each imported Statement Row gets an Import Fingerprint derived from normalized row identity within the Source Account. Re-importing the same CSV or an overlapping CSV skips rows where `(source_account, import_fingerprint)` already exists. Accounted Statement Rows remain in the Staging Area so future imports can still deduplicate against them.
+
+For MVP CSV Imports, statement debit/credit columns are treated as bank-statement direction labels: debit means money out of the statement account and credit means money in. Ledgerly normalizes those labels into one Source Amount before creating Suggested Entries.
 
 Imported Statement Rows are not Beancount ledger entries. Approval remains the later step that writes accounting data to the readable ledger files.
 

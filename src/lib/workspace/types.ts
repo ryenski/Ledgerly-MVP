@@ -17,7 +17,9 @@ export type AddSourceAccountInput = {
 export type CsvSourceMappingInput = {
   postedDateColumn: string;
   descriptionColumn: string;
-  amountColumn: string;
+  amountColumn?: string | null;
+  debitColumn?: string | null;
+  creditColumn?: string | null;
   memoColumn?: string | null;
   referenceIdColumn?: string | null;
   payeeColumn?: string | null;

@@ -339,7 +339,7 @@ sequenceDiagram
 - React owns presentation state, forms, error rendering, and Workspace overview screens.
 - The Workspace overview renders Invalid Ledger State details from `WorkspaceSummary.ledgerValidation` and blocks unsafe Approval and MVP Report affordances while validation is invalid.
 - The Source Account setup UI collects bank or credit-card Source Accounts and optional Opening Balances, then refreshes the Workspace summary returned from the native write.
-- The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
+- The CSV Import setup UI collects a Source Account, raw CSV contents, and a Source Mapping for either one signed amount column or statement debit/credit columns, then stores normalized Statement Rows in SQLite Staging Area tables without writing to Beancount.
 - CSV Import computes an Import Fingerprint from normalized row identity, scopes deduplication to the Source Account, and skips duplicates even when prior rows are already accounted.
 - Suggested Entry review reads pending Statement Rows, previews the Beancount entry, exposes Journal Detail, and approves non-transfer entries into Monthly Transaction Files.
 - Categorization Rules are user-confirmed SQLite records scoped to Source Account by default, visible/editable in the Workspace overview, and used to prefill future Standard Suggested Entries before any future AI suggestion layer.
@@ -367,6 +367,7 @@ sequenceDiagram
 - The UI includes editable path fields so Workspace create/open works even when native directory picker support is unavailable in development.
 - Source Account setup appends valid Beancount directives to the readable ledger files rather than storing canonical account setup only in SQLite.
 - CSV Imports are tied to one Source Account. Imported Statement Rows live in SQLite Staging Area tables and do not mutate the Beancount ledger.
+- CSV Import normalizes statement debit/credit columns into Source Amount using the MVP statement convention: debit is money out, credit is money in.
 - Import deduplication is scoped to `(source_account, import_fingerprint)` and does not attempt global duplicate ledger detection.
 - Approval is blocked during Invalid Ledger State. Approved non-transfer entries write to `transactions/YYYY-MM.bean`, include a Source Account posting plus a balancing Ledger Account posting, and mark the Statement Row accounted in the Staging Area.
 - Approved transfers write one transaction between the two Source Accounts and mark both linked Statement Rows accounted with the same Ledgerly entry id and ledger file path.
