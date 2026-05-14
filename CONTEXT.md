@@ -32,6 +32,10 @@ _Avoid_: Transaction, ledger transaction, entry
 The normalized amount for a Statement Row expressed as the eventual Beancount posting amount for its Source Account.
 _Avoid_: Bank display amount, debit column, credit column, balance direction
 
+**Statement Debit/Credit**:
+CSV statement direction columns where debit means money out of the statement account and credit means money into the statement account for MVP imports.
+_Avoid_: Beancount debit/credit semantics, company-perspective debit/credit, account-type-specific accounting direction
+
 **Entry Preview**:
 The user-facing preview of the Beancount entry that Ledgerly will write on Approval.
 _Avoid_: Category-only review, hidden ledger change
@@ -198,6 +202,8 @@ _Avoid_: Global CSV schema, automatic bank detection
 - A **Source Account** may have one saved **Source Mapping** for repeated CSV Imports.
 - A normalized **Statement Row** requires posted date, description, and amount, with optional supporting fields.
 - A **Statement Row** amount is normalized as a **Source Amount** before Ledgerly creates a Suggested Entry.
+- A **Source Mapping** may map either one signed amount column or **Statement Debit/Credit** columns that normalize to one **Source Amount**.
+- For MVP CSV Imports, **Statement Debit/Credit** means debit is money out and credit is money in, regardless of whether the **Source Account** is a bank or credit-card account.
 - A **Suggested Entry** is reviewed through an **Entry Preview**, with **Journal Detail** available when needed.
 - A **Manual Ledger Edit** is allowed because the Beancount ledger is the source of truth.
 - The **MVP** supports **External Ledger Edits**, not an embedded Beancount editor.
@@ -301,6 +307,9 @@ _Avoid_: Global CSV schema, automatic bank detection
 > **Dev:** "For a credit-card charge, should the imported amount be positive because the card balance went up?"
 > **Domain expert:** "No. The Source Amount is the Beancount posting amount for the Source Account, so the liability posting is negative."
 >
+> **Dev:** "When a bank CSV has separate debit and credit columns, should Ledgerly use accounting debit/credit rules by account type?"
+> **Domain expert:** "No. In MVP CSV statements, debit means money out and credit means money in. Ledgerly normalizes those statement labels into one Source Amount."
+>
 > **Dev:** "Should review show only a suggested category?"
 > **Domain expert:** "No. The primary surface is an Entry Preview, with Journal Detail available for debit and credit inspection."
 >
@@ -353,6 +362,7 @@ _Avoid_: Global CSV schema, automatic bank detection
 - Deduplication could mean repeated CSV rows or duplicate ledger detection; resolved: the MVP deduplicates **Statement Rows** by **Import Fingerprint** within a **Source Account**.
 - CSV mapping could be global, automatic, or per account; resolved: the MVP uses a per-**Source Account** **Source Mapping**.
 - CSV amount signs could follow bank UI conventions or Beancount posting signs; resolved: the MVP normalizes to **Source Amount**.
+- CSV debit/credit columns could mean accounting debit/credit or statement direction; resolved: MVP **Statement Debit/Credit** means debit is money out and credit is money in.
 - Debit and credit language is useful for low-level accounting but not the default review surface; resolved: use **Entry Preview** first and expose **Journal Detail** one click away.
 - Manual edits could be blocked, ignored, or treated as authoritative; resolved: **Manual Ledger Edits** are essential and supported, while **Ledger Validation** reports ledger-level problems.
 - Embedded ledger editing is a rabbit hole; resolved: the MVP supports **External Ledger Edits** and app-level validation errors only.

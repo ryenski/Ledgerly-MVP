@@ -1,0 +1,7 @@
+"Account Number","Transaction Description","Transaction Date","Transaction Type","Transaction Amount","Balance"
+"0000","Withdrawal from EXAMPLE INSURANCE","05/05/26","Debit","266.2","13683.52"
+"0000","Withdrawal from EXAMPLE UTILITIES","05/04/26","Debit","59.95","13949.72"
+"0000","Monthly Interest Paid","04/30/26","Credit","1.13","14009.67"
+"0000","Deposit from EXAMPLE PAYROLL","04/30/26","Credit","4952.7","14008.54"
+"0000","Check #1001 Cashed","04/29/26","Debit","75.5","9055.84"
+"0000","Withdrawal from EXAMPLE INSURANCE","04/28/26","Debit","362.75","9131.34"

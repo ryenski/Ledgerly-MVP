@@ -18,6 +18,8 @@ export function CsvImportSetup({ onImportStatementRows }: CsvImportSetupProps) {
   const [postedDateColumn, setPostedDateColumn] = useState("Date");
   const [descriptionColumn, setDescriptionColumn] = useState("Description");
   const [amountColumn, setAmountColumn] = useState("Amount");
+  const [debitColumn, setDebitColumn] = useState("");
+  const [creditColumn, setCreditColumn] = useState("");
   const [memoColumn, setMemoColumn] = useState("");
   const [referenceIdColumn, setReferenceIdColumn] = useState("");
   const [payeeColumn, setPayeeColumn] = useState("");
@@ -35,7 +37,9 @@ export function CsvImportSetup({ onImportStatementRows }: CsvImportSetupProps) {
         mapping: {
           postedDateColumn: postedDateColumn.trim(),
           descriptionColumn: descriptionColumn.trim(),
-          amountColumn: amountColumn.trim(),
+          amountColumn: optionalColumn(amountColumn),
+          debitColumn: optionalColumn(debitColumn),
+          creditColumn: optionalColumn(creditColumn),
           memoColumn: optionalColumn(memoColumn),
           referenceIdColumn: optionalColumn(referenceIdColumn),
           payeeColumn: optionalColumn(payeeColumn),
@@ -97,6 +101,14 @@ export function CsvImportSetup({ onImportStatementRows }: CsvImportSetupProps) {
             <input value={amountColumn} onChange={(event) => setAmountColumn(event.target.value)} />
           </label>
           <label>
+            Debit column
+            <input value={debitColumn} onChange={(event) => setDebitColumn(event.target.value)} />
+          </label>
+          <label>
+            Credit column
+            <input value={creditColumn} onChange={(event) => setCreditColumn(event.target.value)} />
+          </label>
+          <label>
             Memo column
             <input value={memoColumn} onChange={(event) => setMemoColumn(event.target.value)} />
           </label>
@@ -123,7 +135,7 @@ export function CsvImportSetup({ onImportStatementRows }: CsvImportSetupProps) {
             !csvContents.trim() ||
             !postedDateColumn.trim() ||
             !descriptionColumn.trim() ||
-            !amountColumn.trim() ||
+            (!amountColumn.trim() && (!debitColumn.trim() || !creditColumn.trim())) ||
             isSubmitting
           }
         >

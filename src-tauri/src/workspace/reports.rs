@@ -402,7 +402,9 @@ mod tests {
         CsvSourceMappingInput {
             posted_date_column: "Date".to_string(),
             description_column: "Description".to_string(),
-            amount_column: "Amount".to_string(),
+            amount_column: Some("Amount".to_string()),
+            debit_column: None,
+            credit_column: None,
             memo_column: None,
             reference_id_column: None,
             payee_column: None,

@@ -1,0 +1,7 @@
+"Account Number","Post Date","Check","Description","Debit","Credit","Status","Balance"
+"XXXXXX0000","5/11/2026","","EXAMPLE PAYMENT PROCESSOR TRANSFER","","21990.97","Pending","212419.22"
+"XXXXXX0000","5/8/2026","1001","Check","4000","","Posted","190428.25"
+"XXXXXX0000","5/8/2026","1002","Check","4000","","Posted","194428.25"
+"XXXXXX0000","5/7/2026","","EXAMPLE SERVICE FEE","0.5","","Posted","198428.25"
+"XXXXXX0000","5/7/2026","","EXAMPLE CARD PURCHASE","8.64","","Posted","198428.75"
+"XXXXXX0000","5/7/2026","","EXAMPLE DISBURSEMENT","","50","Posted","198437.39"
